@@ -6,7 +6,7 @@
 >
 > Hosted on [Netlify](https://www.netlify.com/) (free, works with **private** repos). Updates to `prototype/` auto-deploy on every push to `main` (~1 min).
 
-AssureCars is an enabling-technology product that lets **small-to-medium (SMB) car dealers** run their pre-owned car business online. Each dealer gets their own **self-hosted, single-tenant** deployment — their own website, mobile apps, catalog, leads, and test-drive operations — inspired by the customer experience of [Cars24](https://www.cars24.com/) and [Spinny](https://www.spinny.com/), but operated **by the dealer, for the dealer**.
+AssureCars is an enabling-technology product that lets **small-to-medium (SMB) car dealers** run their pre-owned car business online. Each dealer gets their own **self-hosted, single-tenant** deployment — their own website, mobile apps, catalog, leads, and test-drive operations — operated **by the dealer, for the dealer**.
 
 > **Not a marketplace.** AssureCars does not own inventory or share data across dealers. One isolated instance per dealer: own database, storage, domain, and branding.
 
@@ -38,7 +38,7 @@ AssureCars is an enabling-technology product that lets **small-to-medium (SMB) c
 | **Trust anchor** | Mandatory 200-point inspection report (PDF) for every listed car |
 | **Flagship feature** | **Concurrent-slot test-drive booking** — multiple buyers can book back-to-back drives in the same time window |
 | **MVP scope** | Non-financial — no online payments, deposits, or financing; deals close offline |
-| **Inspiration** | Cars24, Spinny — premium certified resale experience |
+| **Positioning** | Premium certified resale experience for SMB dealers |
 
 ### End-to-End Buyer Journey
 
