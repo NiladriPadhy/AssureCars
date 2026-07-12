@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import com.vsp.core.ui.theme.SuccessLight
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -322,8 +323,8 @@ private fun FilterToggle(text: String, selected: Boolean, onClick: () -> Unit) {
     ) { Text(text) }
 }
 
-private val AiGreen = Color(0xFF2E7D32)
-private val ManualBlue = Color(0xFF1976D2)
+private val AiGreen = SuccessLight
+private val ManualBlue = Color(0xFF1E3A5F)
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFinding(finding: AIFinding) {
     val box = finding.boundingBox

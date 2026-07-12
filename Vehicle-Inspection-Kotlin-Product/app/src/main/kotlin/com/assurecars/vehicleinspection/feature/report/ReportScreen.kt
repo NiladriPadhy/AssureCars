@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import com.vsp.core.ui.theme.SuccessLight
+import com.vsp.core.ui.theme.WarningLight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -160,17 +162,19 @@ private fun AtAGlanceCard(content: ReportContent, brandColor: Color) {
     }
 }
 
+private val ScorePoor = Color(0xFFE5484D)
+
 @Composable
 private fun ValuationCard(v: Valuation, brandColor: Color) {
     val scoreColor = when {
-        v.overallScore >= 70 -> Color(0xFF2E7D32)
-        v.overallScore >= 50 -> Color(0xFFF9A825)
-        else -> Color(0xFFC62828)
+        v.overallScore >= 70 -> SuccessLight
+        v.overallScore >= 50 -> WarningLight
+        else -> ScorePoor
     }
     val positionColor = when (v.marketPosition) {
-        "Above typical" -> Color(0xFF2E7D32)
-        "Below typical" -> Color(0xFFC62828)
-        else -> Color(0xFFF9A825)
+        "Above typical" -> SuccessLight
+        "Below typical" -> ScorePoor
+        else -> WarningLight
     }
     SectionCard(title = "Valuation & market position", titleColor = brandColor) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -328,9 +332,9 @@ private fun DetailRowView(row: DetailRow) {
 }
 
 private fun ratingColor(rating: Int): Color = when {
-    rating >= 4 -> Color(0xFF2E7D32)
-    rating == 3 -> Color(0xFFF9A825)
-    else -> Color(0xFFC62828)
+    rating >= 4 -> SuccessLight
+    rating == 3 -> WarningLight
+    else -> ScorePoor
 }
 
 private fun ratingWord(rating: Int): String = when (rating) {

@@ -56,9 +56,9 @@ class HtmlReportGenerator @Inject constructor(
 ) {
 
     private companion object {
-        const val REPORT_PRIMARY = "#0D47A1"
-        const val REPORT_SECONDARY = "#1565C0"
-        const val REPORT_ACCENT = "#0B6E2E"
+        const val REPORT_PRIMARY = "#0FB5A6"
+        const val REPORT_SECONDARY = "#0A1628"
+        const val REPORT_ACCENT = "#16A34A"
     }
 
     /** Company name for the report: the signed-in user's organisation name (null when none). */

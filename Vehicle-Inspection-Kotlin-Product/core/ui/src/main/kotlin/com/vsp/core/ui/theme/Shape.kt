@@ -4,11 +4,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
-/** Softer, more rounded shape system for a modern feel (cards ~16dp, buttons/fields pill-ish). */
+/** Shape radii aligned with prototype tokens: sm 8, md 12, lg 18, xl 28. */
 val VspShapes = Shapes(
-    extraSmall = RoundedCornerShape(6.dp),
-    small = RoundedCornerShape(10.dp),
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
     medium = RoundedCornerShape(14.dp),
-    large = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(18.dp),
     extraLarge = RoundedCornerShape(28.dp),
 )

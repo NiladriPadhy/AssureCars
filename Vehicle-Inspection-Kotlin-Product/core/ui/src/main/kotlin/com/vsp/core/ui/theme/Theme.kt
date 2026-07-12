@@ -87,8 +87,9 @@ val MaterialTheme.vspAccents: VspAccentColors
     @Composable get() = LocalVspAccents.current
 
 /**
- * App Material 3 theme. Uses the fixed brand palette (indigo + teal) by default so the product looks
- * identical on every device; [dynamicColor] can opt in to Material You wallpaper colors on Android 12+.
+ * App Material 3 theme. Uses the fixed AssureCars prototype palette (navy + teal) by default so the
+ * product looks identical on every device; [dynamicColor] can opt in to Material You wallpaper
+ * colors on Android 12+.
  */
 @Composable
 fun VspTheme(
