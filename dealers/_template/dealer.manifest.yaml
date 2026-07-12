@@ -1,0 +1,104 @@
+# AssureCars — Dealer Instance Manifest (single source of truth)
+# Copy this folder:  cp -r dealers/_template dealers/<dealer-id>
+# Edit this file + secrets.env, then run:  ./tools/configure/generate.sh <dealer-id>
+
+schemaVersion: "1.0"
+
+dealer:
+  id: CHANGE_ME          # lowercase slug, e.g. acme-motors
+  displayName: "Dealer Name"
+  legalName: "Dealer Legal Name Pvt Ltd"
+  locale: en-IN
+  timezone: Asia/Kolkata
+  supportPhone: "+91-0000000000"
+  supportEmail: support@example.com
+  defaultCity: Mumbai
+
+domains:
+  api: https://api.example.com
+  website: https://www.example.com
+  admin: https://admin.example.com
+
+branding:
+  primaryColor: "#1B4D3E"
+  secondaryColor: "#F5A623"
+  accentColor: "#FFFFFF"
+  logoPath: assets/logo.png          # relative to this dealer folder
+  faviconPath: assets/favicon.png
+
+mobile:
+  userApp:
+    bundleId: com.example.assurecars.user
+    displayName: "Dealer Name"
+    # AssureCars API base (no trailing slash)
+    apiBaseUrl: https://api.example.com
+    clientId: user-app
+  employeeApp:
+    bundleId: com.example.assurecars.employee
+    displayName: "Dealer Staff"
+    apiBaseUrl: https://api.example.com
+    clientId: employee-app
+  inspectionApp:
+    packageName: com.example.assurecars.inspection
+    displayName: "Dealer Inspection"
+    apiBaseUrl: https://api.example.com
+    authIssuer: https://api.example.com
+    clientId: inspection-app
+    # Optional — leave blank to run inspection app in offline baseline mode
+    firebase:
+      databaseUrl: ""
+      projectId: ""
+      applicationId: ""
+      apiKey: ""
+
+web:
+  website:
+    apiBaseUrl: https://api.example.com
+    siteUrl: https://www.example.com
+    clientId: website
+  adminPortal:
+    apiBaseUrl: https://api.example.com
+    siteUrl: https://admin.example.com
+    clientId: admin-portal
+
+infrastructure:
+  postgres:
+    host: postgres
+    port: 5432
+    database: assurecars_CHANGE_ME
+    user: assurecars
+  redis:
+    host: redis
+    port: 6379
+  storage:
+    type: minio               # minio | s3 | local
+    bucket: assurecars-media
+    endpoint: http://minio:9000
+    publicBaseUrl: https://api.example.com/media
+
+integrations:
+  sms:
+    provider: msg91           # msg91 | twilio | none
+  email:
+    provider: smtp            # smtp | ses | sendgrid | none
+    fromAddress: noreply@example.com
+    fromName: "Dealer Name"
+  push:
+    provider: fcm             # fcm | none
+  maps:
+    provider: google          # google | none
+
+features:
+  sellRequest: true
+  pdiRequest: true
+  whatsapp: false
+  reviews: false
+
+bootstrap:
+  # First admin user — password comes from secrets.env (ADMIN_INITIAL_PASSWORD)
+  admin:
+    email: admin@example.com
+    fullName: "Super Admin"
+    phone: "+91-0000000000"
+
+secretsRef: secrets.env

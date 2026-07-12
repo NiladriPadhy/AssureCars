@@ -1,0 +1,85 @@
+# AssureCars — base Docker Compose stack (shared across all dealers)
+# Per-dealer overrides: dealers/<id>/out/deploy/docker-compose.override.yml
+# Per-dealer secrets:    dealers/<id>/out/deploy/.env
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  webapi:
+    image: assurecars/webapi:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    volumes:
+      - ./dealers/${DEALER_ID}/out/webapi/appsettings.Production.json:/app/appsettings.Production.json:ro
+
+  website:
+    image: assurecars/website:latest
+    restart: unless-stopped
+    depends_on:
+      - webapi
+
+  admin-portal:
+    image: assurecars/admin-portal:latest
+    restart: unless-stopped
+    depends_on:
+      - webapi
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - webapi
+      - website
+      - admin-portal
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  caddy_data:
+  caddy_config:

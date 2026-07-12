@@ -1,0 +1,18 @@
+# Caddy reverse proxy — domain values injected via docker-compose.override.yml
+# TLS: automatic via Let's Encrypt when DNS points to this host.
+
+{
+  email admin@example.com
+}
+
+{$API_DOMAIN} {
+  reverse_proxy webapi:8080
+}
+
+{$WEBSITE_DOMAIN} {
+  reverse_proxy website:80
+}
+
+{$ADMIN_DOMAIN} {
+  reverse_proxy admin-portal:80
+}

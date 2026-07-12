@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://assurecars.dev/schemas/dealer.manifest.schema.json",
+  "title": "AssureCars Dealer Manifest",
+  "description": "Single source of truth for provisioning one self-hosted dealer instance across all platform components.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "dealer",
+    "domains",
+    "branding",
+    "mobile",
+    "web",
+    "infrastructure",
+    "integrations",
+    "features",
+    "bootstrap",
+    "secretsRef"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "dealer": {
+      "type": "object",
+      "required": [
+        "id",
+        "displayName",
+        "legalName",
+        "locale",
+        "timezone",
+        "supportPhone",
+        "supportEmail",
+        "defaultCity"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,48}$",
+          "description": "Lowercase slug used in paths, DB names, and artifact prefixes."
+        },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "legalName": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "locale": { "type": "string", "pattern": "^[a-z]{2}-[A-Z]{2}$" },
+        "timezone": { "type": "string", "minLength": 1 },
+        "supportPhone": { "type": "string", "minLength": 5 },
+        "supportEmail": { "type": "string", "format": "email" },
+        "defaultCity": { "type": "string", "minLength": 1 }
+      }
+    },
+    "domains": {
+      "type": "object",
+      "required": ["api", "website", "admin"],
+      "additionalProperties": false,
+      "properties": {
+        "api": { "type": "string", "format": "uri" },
+        "website": { "type": "string", "format": "uri" },
+        "admin": { "type": "string", "format": "uri" }
+      }
+    },
+    "branding": {
+      "type": "object",
+      "required": ["primaryColor", "secondaryColor", "accentColor", "logoPath", "faviconPath"],
+      "additionalProperties": false,
+      "properties": {
+        "primaryColor": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "secondaryColor": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "accentColor": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "logoPath": { "type": "string", "minLength": 1 },
+        "faviconPath": { "type": "string", "minLength": 1 }
+      }
+    },
+    "mobile": {
+      "type": "object",
+      "required": ["userApp", "employeeApp", "inspectionApp"],
+      "additionalProperties": false,
+      "properties": {
+        "userApp": { "$ref": "#/$defs/mobileClient" },
+        "employeeApp": { "$ref": "#/$defs/mobileClient" },
+        "inspectionApp": {
+          "type": "object",
+          "required": [
+            "packageName",
+            "displayName",
+            "apiBaseUrl",
+            "authIssuer",
+            "clientId",
+            "firebase"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "packageName": { "type": "string", "pattern": "^[a-z][a-z0-9_.]*$" },
+            "displayName": { "type": "string", "minLength": 1 },
+            "apiBaseUrl": { "type": "string", "format": "uri" },
+            "authIssuer": { "type": "string", "format": "uri" },
+            "clientId": { "type": "string", "minLength": 1 },
+            "firebase": {
+              "type": "object",
+              "required": ["databaseUrl", "projectId", "applicationId", "apiKey"],
+              "additionalProperties": false,
+              "properties": {
+                "databaseUrl": { "type": "string" },
+                "projectId": { "type": "string" },
+                "applicationId": { "type": "string" },
+                "apiKey": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "web": {
+      "type": "object",
+      "required": ["website", "adminPortal"],
+      "additionalProperties": false,
+      "properties": {
+        "website": { "$ref": "#/$defs/webClient" },
+        "adminPortal": { "$ref": "#/$defs/webClient" }
+      }
+    },
+    "infrastructure": {
+      "type": "object",
+      "required": ["postgres", "redis", "storage"],
+      "additionalProperties": false,
+      "properties": {
+        "postgres": {
+          "type": "object",
+          "required": ["host", "port", "database", "user"],
+          "additionalProperties": false,
+          "properties": {
+            "host": { "type": "string" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "database": { "type": "string", "minLength": 1 },
+            "user": { "type": "string", "minLength": 1 }
+          }
+        },
+        "redis": {
+          "type": "object",
+          "required": ["host", "port"],
+          "additionalProperties": false,
+          "properties": {
+            "host": { "type": "string" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "required": ["type", "bucket", "endpoint", "publicBaseUrl"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "type": "string", "enum": ["minio", "s3", "local"] },
+            "bucket": { "type": "string", "minLength": 1 },
+            "endpoint": { "type": "string" },
+            "publicBaseUrl": { "type": "string", "format": "uri" }
+          }
+        }
+      }
+    },
+    "integrations": {
+      "type": "object",
+      "required": ["sms", "email", "push", "maps"],
+      "additionalProperties": false,
+      "properties": {
+        "sms": {
+          "type": "object",
+          "required": ["provider"],
+          "additionalProperties": false,
+          "properties": {
+            "provider": { "type": "string", "enum": ["msg91", "twilio", "none"] }
+          }
+        },
+        "email": {
+          "type": "object",
+          "required": ["provider", "fromAddress", "fromName"],
+          "additionalProperties": false,
+          "properties": {
+            "provider": { "type": "string", "enum": ["smtp", "ses", "sendgrid", "none"] },
+            "fromAddress": { "type": "string", "format": "email" },
+            "fromName": { "type": "string", "minLength": 1 }
+          }
+        },
+        "push": {
+          "type": "object",
+          "required": ["provider"],
+          "additionalProperties": false,
+          "properties": {
+            "provider": { "type": "string", "enum": ["fcm", "none"] }
+          }
+        },
+        "maps": {
+          "type": "object",
+          "required": ["provider"],
+          "additionalProperties": false,
+          "properties": {
+            "provider": { "type": "string", "enum": ["google", "none"] }
+          }
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "required": ["sellRequest", "pdiRequest", "whatsapp", "reviews"],
+      "additionalProperties": false,
+      "properties": {
+        "sellRequest": { "type": "boolean" },
+        "pdiRequest": { "type": "boolean" },
+        "whatsapp": { "type": "boolean" },
+        "reviews": { "type": "boolean" }
+      }
+    },
+    "bootstrap": {
+      "type": "object",
+      "required": ["admin"],
+      "additionalProperties": false,
+      "properties": {
+        "admin": {
+          "type": "object",
+          "required": ["email", "fullName", "phone"],
+          "additionalProperties": false,
+          "properties": {
+            "email": { "type": "string", "format": "email" },
+            "fullName": { "type": "string", "minLength": 1 },
+            "phone": { "type": "string", "minLength": 5 }
+          }
+        }
+      }
+    },
+    "secretsRef": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Filename of the secrets file relative to the dealer folder."
+    }
+  },
+  "$defs": {
+    "mobileClient": {
+      "type": "object",
+      "required": ["bundleId", "displayName", "apiBaseUrl", "clientId"],
+      "additionalProperties": false,
+      "properties": {
+        "bundleId": { "type": "string", "pattern": "^[a-z][a-z0-9_.]*$" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "apiBaseUrl": { "type": "string", "format": "uri" },
+        "clientId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "webClient": {
+      "type": "object",
+      "required": ["apiBaseUrl", "siteUrl", "clientId"],
+      "additionalProperties": false,
+      "properties": {
+        "apiBaseUrl": { "type": "string", "format": "uri" },
+        "siteUrl": { "type": "string", "format": "uri" },
+        "clientId": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

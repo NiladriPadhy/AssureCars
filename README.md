@@ -2,9 +2,7 @@
 
 **Premium Certified Used-Car Reseller Platform**
 
-> **Interactive Prototype — [Open live preview ↗](https://boisterous-smakager-5b29ff.netlify.app)**
->
-> Hosted on [Netlify](https://www.netlify.com/) (free, works with **private** repos). Updates to `prototype/` auto-deploy on every push to `main` (~1 min).
+> **Platform OverView — [Open preview ↗](https://assurecars-marketing.vercel.app/)**
 
 AssureCars is an enabling-technology product that lets **small-to-medium (SMB) car dealers** run their pre-owned car business online. Each dealer gets their own **self-hosted, single-tenant** deployment — their own website, mobile apps, catalog, leads, and test-drive operations — operated **by the dealer, for the dealer**.
 

@@ -1,0 +1,98 @@
+# Acme Motors — example dealer instance (safe to commit; no secrets)
+schemaVersion: "1.0"
+
+dealer:
+  id: acme-motors
+  displayName: "Acme Motors"
+  legalName: "Acme Motors Pvt Ltd"
+  locale: en-IN
+  timezone: Asia/Kolkata
+  supportPhone: "+91-9876543210"
+  supportEmail: support@acmemotors.example
+  defaultCity: Mumbai
+
+domains:
+  api: https://api.acmemotors.example
+  website: https://www.acmemotors.example
+  admin: https://admin.acmemotors.example
+
+branding:
+  primaryColor: "#1B4D3E"
+  secondaryColor: "#F5A623"
+  accentColor: "#FFFFFF"
+  logoPath: assets/logo.png
+  faviconPath: assets/favicon.png
+
+mobile:
+  userApp:
+    bundleId: com.acmemotors.assurecars.user
+    displayName: "Acme Motors"
+    apiBaseUrl: https://api.acmemotors.example
+    clientId: user-app
+  employeeApp:
+    bundleId: com.acmemotors.assurecars.employee
+    displayName: "Acme Staff"
+    apiBaseUrl: https://api.acmemotors.example
+    clientId: employee-app
+  inspectionApp:
+    packageName: com.acmemotors.assurecars.inspection
+    displayName: "Acme Inspection"
+    apiBaseUrl: https://api.acmemotors.example
+    authIssuer: https://api.acmemotors.example
+    clientId: inspection-app
+    firebase:
+      databaseUrl: ""
+      projectId: ""
+      applicationId: ""
+      apiKey: ""
+
+web:
+  website:
+    apiBaseUrl: https://api.acmemotors.example
+    siteUrl: https://www.acmemotors.example
+    clientId: website
+  adminPortal:
+    apiBaseUrl: https://api.acmemotors.example
+    siteUrl: https://admin.acmemotors.example
+    clientId: admin-portal
+
+infrastructure:
+  postgres:
+    host: postgres
+    port: 5432
+    database: assurecars_acme_motors
+    user: assurecars
+  redis:
+    host: redis
+    port: 6379
+  storage:
+    type: minio
+    bucket: acme-motors-media
+    endpoint: http://minio:9000
+    publicBaseUrl: https://api.acmemotors.example/media
+
+integrations:
+  sms:
+    provider: msg91
+  email:
+    provider: smtp
+    fromAddress: noreply@acmemotors.example
+    fromName: "Acme Motors"
+  push:
+    provider: fcm
+  maps:
+    provider: google
+
+features:
+  sellRequest: true
+  pdiRequest: true
+  whatsapp: false
+  reviews: false
+
+bootstrap:
+  admin:
+    email: admin@acmemotors.example
+    fullName: "Acme Super Admin"
+    phone: "+91-9876543210"
+
+secretsRef: secrets.env
