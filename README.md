@@ -2,10 +2,9 @@
 
 **Premium Certified Used-Car Reseller Platform**
 
-> **Interactive Prototype**
-> - **Live (GitHub Pages):** [niladripadhy.github.io/AssureCars](https://niladripadhy.github.io/AssureCars/)
-> - **Repo file:** [prototype/index.html](https://github.com/NiladriPadhy/AssureCars/blob/main/prototype/index.html)
-> - **Local:** [`prototype/index.html`](prototype/index.html)
+> **Interactive Prototype — [Open live preview ↗](https://assurecars-prototype.netlify.app)**
+>
+> Hosted on [Netlify](https://www.netlify.com/) (free, works with **private** repos). Updates to `prototype/` auto-deploy on every push to `main` (~1 min).
 
 AssureCars is an enabling-technology product that lets **small-to-medium (SMB) car dealers** run their pre-owned car business online. Each dealer gets their own **self-hosted, single-tenant** deployment — their own website, mobile apps, catalog, leads, and test-drive operations — inspired by the customer experience of [Cars24](https://www.cars24.com/) and [Spinny](https://www.spinny.com/), but operated **by the dealer, for the dealer**.
 
@@ -231,40 +230,43 @@ Capacity = min(car availability, hub bays, available agents)
 
 ## Interactive UI Prototype
 
-The repository includes a **fully interactive HTML prototype** at [`prototype/index.html`](https://github.com/NiladriPadhy/AssureCars/blob/main/prototype/index.html). It models all four client surfaces and is the fastest way to explore flows, screen layouts, and the product vocabulary before any production code is written.
+The repository includes a **fully interactive HTML prototype** in [`prototype/`](prototype/). It models all four client surfaces and is the fastest way to explore flows, screen layouts, and the product vocabulary before any production code is written.
 
 ### Open the Prototype
 
-| Method | Link |
-|--------|------|
-| **Live (from repo via GitHub Pages)** | [https://niladripadhy.github.io/AssureCars/](https://niladripadhy.github.io/AssureCars/) |
-| **View source in GitHub** | [prototype/index.html](https://github.com/NiladriPadhy/AssureCars/blob/main/prototype/index.html) |
-| **Local file** (after clone) | [`prototype/index.html`](prototype/index.html) |
+| Method | Link / command |
+|--------|----------------|
+| **Live preview** *(recommended — works with private repo)* | **[assurecars-prototype.netlify.app](https://assurecars-prototype.netlify.app)** |
+| **Local** *(after clone)* | `open prototype/index.html` |
+| **Local server** | `python3 -m http.server 8765 --directory prototype` → `http://localhost:8765/` |
 
-**Clone and open locally**
+Anyone with the README link can open the live preview — no GitHub access required. The **repo stays private**; only the static prototype is published.
 
-```bash
-git clone https://github.com/NiladriPadhy/AssureCars.git
-cd AssureCars
-open prototype/index.html
-```
+### Auto-deploy on every push
 
-**Or serve locally**
+Changes under `prototype/` are deployed automatically when you push to `main` (typically within **30–60 seconds**). No manual publish step.
 
-```bash
-python3 -m http.server 8765 --directory prototype
-# → http://localhost:8765/
-```
+**One-time setup** *(repo owner, ~5 minutes)*:
 
-> **GitHub Pages:** After pushing, enable **Settings → Pages → Source: GitHub Actions**. The workflow in `.github/workflows/deploy-prototype.yml` publishes `prototype/` on every push to `main`.
+1. Create a free account at [netlify.com](https://www.netlify.com/).
+2. **Add new site → Import an existing project → GitHub** → authorize Netlify for your private `AssureCars` repo.
+3. Build settings are read from [`netlify.toml`](netlify.toml) automatically:
+   - **Publish directory:** `prototype`
+   - **Build command:** *(none)*
+4. Deploy. Pick a site name (e.g. `assurecars-prototype`) — your URL becomes `https://assurecars-prototype.netlify.app`.
+5. Update the live-preview URL at the top of this README if your site name differs.
+
+After that, every `git push` that touches `prototype/` triggers a new deploy.
+
+> **Alternatives** (same idea, free tier, private-repo support): [Vercel](https://vercel.com), [Cloudflare Pages](https://pages.cloudflare.com). Use publish directory `prototype`, no build command.
 
 ### Prototype Files
 
 | File | Purpose |
 |------|---------|
-| [`prototype/index.html`](https://github.com/NiladriPadhy/AssureCars/blob/main/prototype/index.html) | Shell — top bar, surface tabs, stage canvas |
-| [`prototype/styles.css`](https://github.com/NiladriPadhy/AssureCars/blob/main/prototype/styles.css) | Design tokens, layout, component styles |
-| [`prototype/app.js`](https://github.com/NiladriPadhy/AssureCars/blob/main/prototype/app.js) | All screens, navigation, mock data, interactions |
+| [`prototype/index.html`](prototype/index.html) | Shell — top bar, surface tabs, stage canvas |
+| [`prototype/styles.css`](prototype/styles.css) | Design tokens, layout, component styles |
+| [`prototype/app.js`](prototype/app.js) | All screens, navigation, mock data, interactions |
 
 ### How to Navigate
 
@@ -425,7 +427,7 @@ This repository is currently in the **design & prototype phase**. Production app
 
 **What you can do today:**
 
-1. **Explore the prototype** — `open prototype/index.html` or serve via HTTP (see above)
+1. **Explore the prototype** — [live preview](https://assurecars-prototype.netlify.app) or `open prototype/index.html` locally (see above)
 2. **Read the design docs** — start with the [Executive Summary](Docs/Solution-Design-Document.md#2-executive-summary)
 3. **Run the Inspection App** — see [`Vehicle-Inspection-Kotlin-Product/README.md`](Vehicle-Inspection-Kotlin-Product/README.md)
 4. **Review the database schema** — [`database/migrations/001_initial_schema.sql`](database/migrations/001_initial_schema.sql)

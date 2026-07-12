@@ -1,0 +1,12 @@
+# Netlify — auto-deploy prototype/ on every push to main (works with private GitHub repos, free tier)
+# One-time setup: https://app.netlify.com → Add new site → Import from Git → select AssureCars
+
+[build]
+  publish = "prototype"
+  command = ""
+
+# Short cache so preview updates are visible soon after each deploy (~30–60s after push)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
