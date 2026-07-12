@@ -2,7 +2,7 @@
 
 **Premium Certified Used-Car Reseller Platform**
 
-> **Interactive Prototype — [Open live preview ↗](https://assurecars-prototype.netlify.app)**
+> **Interactive Prototype — [Open live preview ↗](https://boisterous-smakager-5b29ff.netlify.app)**
 >
 > Hosted on [Netlify](https://www.netlify.com/) (free, works with **private** repos). Updates to `prototype/` auto-deploy on every push to `main` (~1 min).
 
@@ -236,7 +236,7 @@ The repository includes a **fully interactive HTML prototype** in [`prototype/`]
 
 | Method | Link / command |
 |--------|----------------|
-| **Live preview** *(recommended — works with private repo)* | **[assurecars-prototype.netlify.app](https://assurecars-prototype.netlify.app)** |
+| **Live preview** *(recommended — works with private repo)* | **[boisterous-smakager-5b29ff.netlify.app](https://boisterous-smakager-5b29ff.netlify.app)** |
 | **Local** *(after clone)* | `open prototype/index.html` |
 | **Local server** | `python3 -m http.server 8765 --directory prototype` → `http://localhost:8765/` |
 
@@ -253,8 +253,8 @@ Changes under `prototype/` are deployed automatically when you push to `main` (t
 3. Build settings are read from [`netlify.toml`](netlify.toml) automatically:
    - **Publish directory:** `prototype`
    - **Build command:** *(none)*
-4. Deploy. Pick a site name (e.g. `assurecars-prototype`) — your URL becomes `https://assurecars-prototype.netlify.app`.
-5. Update the live-preview URL at the top of this README if your site name differs.
+4. Deploy. Live URL: **[https://boisterous-smakager-5b29ff.netlify.app/](https://boisterous-smakager-5b29ff.netlify.app/)** *(you can rename the site in Netlify → Domain settings for a cleaner URL later)*.
+5. Update the live-preview URL at the top of this README if you change the Netlify site name or custom domain.
 
 After that, every `git push` that touches `prototype/` triggers a new deploy.
 
@@ -427,7 +427,7 @@ This repository is currently in the **design & prototype phase**. Production app
 
 **What you can do today:**
 
-1. **Explore the prototype** — [live preview](https://assurecars-prototype.netlify.app) or `open prototype/index.html` locally (see above)
+1. **Explore the prototype** — [live preview](https://boisterous-smakager-5b29ff.netlify.app) or `open prototype/index.html` locally (see above)
 2. **Read the design docs** — start with the [Executive Summary](Docs/Solution-Design-Document.md#2-executive-summary)
 3. **Run the Inspection App** — see [`Vehicle-Inspection-Kotlin-Product/README.md`](Vehicle-Inspection-Kotlin-Product/README.md)
 4. **Review the database schema** — [`database/migrations/001_initial_schema.sql`](database/migrations/001_initial_schema.sql)
