@@ -2,6 +2,11 @@
 
 **Premium Certified Used-Car Reseller Platform**
 
+> **Interactive Prototype**
+> - **Live (GitHub Pages):** [niladripadhy.github.io/AssureCars](https://niladripadhy.github.io/AssureCars/)
+> - **Repo file:** [prototype/index.html](https://github.com/NiladriPadhy/AssureCars/blob/main/prototype/index.html)
+> - **Local:** [`prototype/index.html`](prototype/index.html)
+
 AssureCars is an enabling-technology product that lets **small-to-medium (SMB) car dealers** run their pre-owned car business online. Each dealer gets their own **self-hosted, single-tenant** deployment — their own website, mobile apps, catalog, leads, and test-drive operations — inspired by the customer experience of [Cars24](https://www.cars24.com/) and [Spinny](https://www.spinny.com/), but operated **by the dealer, for the dealer**.
 
 > **Not a marketplace.** AssureCars does not own inventory or share data across dealers. One isolated instance per dealer: own database, storage, domain, and branding.
@@ -226,35 +231,40 @@ Capacity = min(car availability, hub bays, available agents)
 
 ## Interactive UI Prototype
 
-The repository includes a **fully interactive HTML prototype** that models all four client surfaces. It is the fastest way to explore flows, screen layouts, and the product vocabulary before any production code is written.
+The repository includes a **fully interactive HTML prototype** at [`prototype/index.html`](https://github.com/NiladriPadhy/AssureCars/blob/main/prototype/index.html). It models all four client surfaces and is the fastest way to explore flows, screen layouts, and the product vocabulary before any production code is written.
 
-### Quick Start — Open in Browser
+### Open the Prototype
 
-**Option A — Direct file open**
+| Method | Link |
+|--------|------|
+| **Live (from repo via GitHub Pages)** | [https://niladripadhy.github.io/AssureCars/](https://niladripadhy.github.io/AssureCars/) |
+| **View source in GitHub** | [prototype/index.html](https://github.com/NiladriPadhy/AssureCars/blob/main/prototype/index.html) |
+| **Local file** (after clone) | [`prototype/index.html`](prototype/index.html) |
+
+**Clone and open locally**
 
 ```bash
+git clone https://github.com/NiladriPadhy/AssureCars.git
+cd AssureCars
 open prototype/index.html
 ```
 
-On macOS you can also double-click `prototype/index.html` in Finder.
-
-**Option B — Local HTTP server** *(recommended if assets fail to load)*
+**Or serve locally**
 
 ```bash
-# From the repository root
 python3 -m http.server 8765 --directory prototype
-
-# Then open in your browser:
-# http://localhost:8765/
+# → http://localhost:8765/
 ```
+
+> **GitHub Pages:** After pushing, enable **Settings → Pages → Source: GitHub Actions**. The workflow in `.github/workflows/deploy-prototype.yml` publishes `prototype/` on every push to `main`.
 
 ### Prototype Files
 
 | File | Purpose |
 |------|---------|
-| [`prototype/index.html`](prototype/index.html) | Shell — top bar, surface tabs, stage canvas |
-| [`prototype/styles.css`](prototype/styles.css) | Design tokens, layout, component styles |
-| [`prototype/app.js`](prototype/app.js) | All screens, navigation, mock data, interactions |
+| [`prototype/index.html`](https://github.com/NiladriPadhy/AssureCars/blob/main/prototype/index.html) | Shell — top bar, surface tabs, stage canvas |
+| [`prototype/styles.css`](https://github.com/NiladriPadhy/AssureCars/blob/main/prototype/styles.css) | Design tokens, layout, component styles |
+| [`prototype/app.js`](https://github.com/NiladriPadhy/AssureCars/blob/main/prototype/app.js) | All screens, navigation, mock data, interactions |
 
 ### How to Navigate
 
