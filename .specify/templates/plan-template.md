@@ -18,29 +18,38 @@
   the iteration process.
 -->
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
+**Language/Version**: [Flutter/Dart | Kotlin | Angular/TypeScript | C#/.NET — per affected surface; see `.specify/memory/constitution.md`]
 
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
+**Primary Dependencies**: [e.g., ASP.NET Core, Flutter SDK, Angular CLI — per affected surface]
 
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
+**Storage**: PostgreSQL 15+ (primary), Redis (cache/locks), MinIO/local S3-compatible (media + PDFs)
 
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
+**Testing**: xUnit/NUnit (.NET), Flutter test, Angular/Jest/Karma, contract tests from OpenAPI — mandatory integration tests for concurrency/auth paths
 
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
+**Target Platform**: Self-hosted Docker Compose (Linux); Flutter Android+iOS; Angular web (SSR/SSG website + SPA admin); Kotlin Inspection App (external)
 
-**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]
+**Project Type**: Multi-stack monorepo — `apps/user-app`, `apps/employee-app`, `apps/website`, `apps/admin`, `src/WebApi`
 
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
+**Performance Goals**: Search p95 < 500 ms; detail p95 < 300 ms; booking/reservation p95 < 800 ms (SMB single-server)
 
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
+**Constraints**: Non-financial MVP through Phase 2; single-tenant per dealer; API-first; OpenAPI contract required; WCAG 2.1 AA on web
 
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Scale/Scope**: SMB dealer catalog; concurrent-slot test-drive engine; five client surfaces + external Inspection App integration
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Verify against `.specify/memory/constitution.md` before proceeding. All gates MUST pass; document any violation in Complexity Tracking below.
+
+- [ ] **API-First**: No business logic in client-only code; changes align with OpenAPI `/v1` contract
+- [ ] **Single-Tenant**: No shared multi-tenant data assumptions; config-not-fork for dealer differences
+- [ ] **Non-Financial**: Feature excludes payments, deposits, financing, refunds, commission settlement
+- [ ] **Concurrency**: Inventory/slot changes include idempotency + optimistic locking + integration test plan
+- [ ] **Inspection Integration**: No in-app inspection capture; PDF ingestion / webhook only if touching inspections
+- [ ] **Multi-Stack**: Affected surfaces identified (`apps/*`, `src/WebApi/`); contract tests planned per client
+- [ ] **Auth**: Three login types respected; `accountType` + `allowedClients` + `X-Client-Id` enforced
+- [ ] **Self-Host**: Docker Compose deployable; no mandatory cloud-only dependencies for MVP
 
 ## Project Structure
 
@@ -65,39 +74,25 @@ specs/[###-feature]/
 -->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+apps/
+├── user-app/              # Flutter — buyer/seller mobile
+├── employee-app/          # Flutter — dealer staff mobile
+├── website/               # Angular — customer storefront (SSR/SSG)
+└── admin/                 # Angular — admin panel SPA
 
-tests/
-├── contract/
-├── integration/
+src/
+└── WebApi/                # ASP.NET Core modular monolith
+
+Vehicle-Inspection-Kotlin-Product/   # External Kotlin inspection app (integrate only)
+
+database/migrations/       # PostgreSQL DDL
+
+tests/                     # Cross-cutting or WebAPI-focused
+├── contract/              # OpenAPI contract tests (mandatory per client)
+├── integration/           # API + DB + Redis (mandatory for concurrency)
 └── unit/
 
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+specs/[###-feature]/       # Per-feature design artifacts
 ```
 
 **Structure Decision**: [Document the selected structure and reference the real

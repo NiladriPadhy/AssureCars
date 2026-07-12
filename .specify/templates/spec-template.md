@@ -123,9 +123,11 @@
   ACTION REQUIRED: The content in this section represents placeholders.
   Fill them out with the right assumptions based on reasonable defaults
   chosen when the feature description did not specify certain details.
+  Verify scope against `.specify/memory/constitution.md` — MVP through Phase 2
+  is non-financial; Inspection App is external; one dealer = one instance.
 -->
 
 - [Assumption about target users, e.g., "Users have stable internet connectivity"]
-- [Assumption about scope boundaries, e.g., "Mobile support is out of scope for v1"]
-- [Assumption about data/environment, e.g., "Existing authentication system will be reused"]
-- [Dependency on existing system/service, e.g., "Requires access to the existing user profile API"]
+- [Assumption about scope boundaries, e.g., "Financial workflows out of scope per constitution"]
+- [Assumption about data/environment, e.g., "Single-tenant self-hosted instance per dealer"]
+- [Dependency on existing system/service, e.g., "Requires WebAPI OpenAPI contract and Inspection App webhook"]

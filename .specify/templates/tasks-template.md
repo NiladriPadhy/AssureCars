@@ -9,7 +9,7 @@ description: "Task list template for feature implementation"
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: The examples below include test tasks. Tests are OPTIONAL - only include them if explicitly requested in the feature specification.
+**Tests**: Per AssureCars constitution, contract tests (OpenAPI) and integration tests for concurrency/auth/state-machine paths are MANDATORY. Other tests are included when requested in the feature specification.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -21,10 +21,17 @@ description: "Task list template for feature implementation"
 
 ## Path Conventions
 
-- **Single project**: `src/`, `tests/` at repository root
-- **Web app**: `backend/src/`, `frontend/src/`
-- **Mobile**: `api/src/`, `ios/src/` or `android/src/`
-- Paths shown below assume single project - adjust based on plan.md structure
+AssureCars multi-stack monorepo (see `.specify/memory/constitution.md`):
+
+- **Web API**: `src/WebApi/` — ASP.NET Core modular monolith
+- **User App**: `apps/user-app/` — Flutter
+- **Employee App**: `apps/employee-app/` — Flutter
+- **Website**: `apps/website/` — Angular (SSR/SSG)
+- **Admin Panel**: `apps/admin/` — Angular SPA
+- **Inspection App**: `Vehicle-Inspection-Kotlin-Product/` — external Kotlin (integration only)
+- **Database**: `database/migrations/`
+- **Tests**: `tests/contract/`, `tests/integration/`, `tests/unit/` (+ per-app test dirs as needed)
+- Paths in tasks MUST use the real directories from plan.md for the affected surfaces
 
 <!--
   ============================================================================
