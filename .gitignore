@@ -1,0 +1,296 @@
+# =============================================================================
+# Common .gitignore — Kotlin/Android, .NET, Flutter, Angular
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# OS & editor noise
+# -----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+*~
+*.swp
+*.swo
+*.bak
+*.tmp
+*.temp
+
+# -----------------------------------------------------------------------------
+# IDE / editor (shared)
+# -----------------------------------------------------------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# -----------------------------------------------------------------------------
+# Secrets & local config (never commit)
+# -----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+keystore.properties
+local.properties
+google-services.json
+GoogleService-Info.plist
+firebase_options.dart
+secrets.json
+appsettings.Development.json
+appsettings.Local.json
+
+# -----------------------------------------------------------------------------
+# Logs & diagnostics
+# -----------------------------------------------------------------------------
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# -----------------------------------------------------------------------------
+# Kotlin / Android / Gradle / JVM
+# -----------------------------------------------------------------------------
+.gradle/
+build/
+out/
+bin/
+!gradle/wrapper/gradle-wrapper.jar
+*.class
+*.jar
+!gradle-wrapper.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+.kotlin/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.hprof
+.navigation/
+lint/intermediates/
+lint/generated/
+lint/outputs/
+lint/tmp/
+
+# -----------------------------------------------------------------------------
+# .NET / C# / F# / Visual Studio
+# -----------------------------------------------------------------------------
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+artifacts/
+*.rsuser
+*.userprefs
+.vs/
+*.dbmdl
+*.dbproj.schemaview
+*.jfm
+*.publishsettings
+orleans.codegen.cs
+Generated_Code/
+*_i.c
+*_p.c
+*_h.h
+*.ilk
+*.meta
+*.obj
+*.iobj
+*.pch
+*.pdb
+*.ipdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp_proj
+*_wpftmp.csproj
+*.tlog
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
+*.ncrunch*
+_NCrunch_*
+.*crunch*.local.xml
+nCrunchTemp_*
+*.DotSettings.user
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+ScaffoldingReadMe.txt
+StyleCopReport.xml
+*.azurePubxml
+*.pubxml
+*.publishproj
+PublishScripts/
+*.Cache
+ClientBin/
+~$*
+*.db
+*.db-shm
+*.db-wal
+*.mdf
+*.ldf
+*.ndf
+BenchmarkDotNet.Artifacts/
+MigrationBackup/
+.ionide/
+FodyWeavers.xsd
+TestResult*/
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+*.opencover.xml
+*.dotCover
+.axoCover/*
+!.axoCover/settings.json
+_Chutzpah*
+*.VisualState.xml
+TestResults.xml
+nunit-*.xml
+*.[Rr]e[Ss]harper
+_ReSharper*/
+
+# -----------------------------------------------------------------------------
+# Flutter / Dart
+# -----------------------------------------------------------------------------
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+**/doc/api/
+**/ios/Flutter/.last_build_id
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Runner/GeneratedPluginRegistrant.*
+**/macos/Flutter/ephemeral/
+**/macos/Pods/
+**/android/.gradle/
+**/android/captures/
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+**/android/**/GeneratedPluginRegistrant.kt
+**/android/key.properties
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+.packages
+
+# -----------------------------------------------------------------------------
+# Angular / Node / TypeScript / npm / yarn / pnpm
+# -----------------------------------------------------------------------------
+node_modules/
+bower_components/
+jspm_packages/
+dist/
+dist-ssr/
+tmp/
+temp/
+.angular/
+.sass-cache/
+connect.lock
+libpeerconnection.log
+testem.log
+/typings
+__screenshots__/
+/.nx/cache
+/.nx/workspace-data
+.nx/
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+.npm
+.yarn-integrity
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# -----------------------------------------------------------------------------
+# Testing & coverage (cross-stack)
+# -----------------------------------------------------------------------------
+coverage/
+*.lcov
+.nyc_output/
+htmlcov/
+.tox/
+.pytest_cache/
+.hypothesis/
+
+# -----------------------------------------------------------------------------
+# Misc build & package managers
+# -----------------------------------------------------------------------------
+*.orig
+*.rej
+*.patch
+*.diff
+vendor/
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl

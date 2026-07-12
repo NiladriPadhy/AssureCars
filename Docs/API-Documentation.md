@@ -1,0 +1,2742 @@
+# AssureCars — API Documentation
+
+**Product:** AssureCars — Premium Certified Used-Car Reseller Platform  
+**API Version:** v1  
+**Base URL:** `https://{dealer-domain}/api/v1`  
+**Status:** Draft — aligned with Solution Design Document v1.7  
+**Last Updated:** 2026-07-11
+
+---
+
+## Table of Contents
+
+1. [Overview](#1-overview)
+2. [Authentication](#2-authentication)
+3. [Identity & Profile](#3-identity--profile)
+4. [Cars & Discovery (Public)](#4-cars--discovery-public)
+5. [Interest & Leads](#5-interest--leads)
+6. [Test Drive Booking](#6-test-drive-booking)
+7. [Reservations](#7-reservations)
+8. [Inspection Reports (Buyer)](#8-inspection-reports-buyer)
+9. [Inspection Services — Sell & PDI (Phase 2)](#9-inspection-services--sell--pdi-phase-2)
+10. [Employee APIs](#10-employee-apis)
+11. [Admin APIs](#11-admin-apis)
+12. [Inspection App Integration (Webhook)](#12-inspection-app-integration-webhook)
+13. [Media](#13-media)
+14. [Reviews (Phase 2)](#14-reviews-phase-2)
+15. [Reference Data & CMS](#15-reference-data--cms)
+16. [Common Schemas](#16-common-schemas)
+17. [Error Responses](#17-error-responses)
+
+---
+
+## 1. Overview
+
+### 1.1 Conventions
+
+| Item | Convention |
+|------|------------|
+| Format | REST + JSON (`Content-Type: application/json`) |
+| Versioning | URI prefix `/v1` |
+| Auth | `Authorization: Bearer <access_token>` + `X-Client-Id: UserApp|Website|EmployeeApp|AdminPortal|InspectionApp` |
+| Idempotency | `Idempotency-Key: <uuid>` on state-changing POSTs |
+| Optimistic lock | `If-Match: "<rowVersion>"` on PATCH |
+| Tracing | `traceparent` header propagated |
+| Timestamps | ISO-8601 UTC (`2026-07-11T14:30:00Z`) |
+| Money | Stored as paise internally; API exposes `amountPaise` + human `display` |
+| Pagination (lists) | Cursor: `?cursor=abc&limit=20` or page: `?page=1&size=20` |
+
+### 1.2 Response Envelope
+
+**Single resource**
+
+```json
+{
+  "data": { /* resource */ },
+  "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+}
+```
+
+**List resource**
+
+```json
+{
+  "data": [ /* items */ ],
+  "meta": {
+    "total": 128,
+    "nextCursor": "eyJpZCI6ImMxIn0",
+    "facets": {
+      "fuelType": { "Petrol": 42, "Diesel": 86 },
+      "bodyStyle": { "SUV": 55, "Sedan": 38 }
+    }
+  },
+  "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+}
+```
+
+### 1.3 Login Types & Client Access
+
+AssureCars has **three login types**. Each issues JWTs scoped to specific client applications. The API gateway rejects a token if the request's `X-Client-Id` is not in the token's `allowedClients` claim.
+
+| Login type | Auth method | Client apps | API groups allowed |
+|------------|-------------|-------------|-------------------|
+| **User Login** | OTP (phone) | `UserApp`, `Website` | Public APIs + User APIs (`/v1/me`, interest, test drives, reservations, inspection requests) |
+| **Employee Login** | Password (+ MFA if enabled) | `EmployeeApp`, `InspectionApp` | Public APIs + Employee APIs (`/v1/employee/*`, test-drive execution) |
+| **Admin Login** | Password + MFA (required) | `AdminPortal`, `EmployeeApp`, `InspectionApp` | Public + Employee + Admin APIs (`/v1/admin/*`) |
+
+**Inspection App:** Uses **Employee Login** or **Admin Login** tokens only. The existing Inspection App login screen will be updated separately to authenticate against AssureCars IdP. **User Login tokens are never accepted.**
+
+**Guest (no login):** Public read-only APIs only — browse cars, hubs, CMS banners.
+
+#### API Access Matrix
+
+| API group | Guest | User Login | Employee Login | Admin Login |
+|-----------|-------|------------|----------------|-------------|
+| `GET /v1/cars`, car detail, hubs, CMS | ✓ | ✓ | ✓ | ✓ |
+| `POST /v1/cars/{id}/interest`, `/v1/test-drives`, `/v1/reservations` | ✗ | ✓ | ✗ | ✗ |
+| `GET/PUT /v1/me`, `/v1/me/*` | ✗ | ✓ | ✓ | ✓ |
+| `/v1/employee/*` | ✗ | ✗ | ✓ | ✓ |
+| `/v1/admin/*` | ✗ | ✗ | ✗ | ✓ |
+| Inspection App (capture UI) | ✗ | ✗ | ✓ | ✓ |
+| `POST /v1/integrations/inspection/reports` | HMAC | HMAC | HMAC | HMAC |
+
+#### JWT Claims (all login types)
+
+```json
+{
+  "sub": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "accountType": "User",
+  "clientId": "UserApp",
+  "allowedClients": ["UserApp", "Website"],
+  "roles": ["user"],
+  "permissions": ["cars:read", "interest:create", "test-drives:create"],
+  "exp": 1720700000,
+  "iat": 1720699100
+}
+```
+
+| Claim | Values |
+|-------|--------|
+| `accountType` | `User`, `Employee`, `Admin` |
+| `clientId` | Client that initiated login |
+| `allowedClients` | Clients permitted to use this token |
+| `roles` | RBAC roles (e.g. `sales_executive`, `hub_manager`, `super_admin`) |
+| `permissions` | Fine-grained permission codes |
+
+### 1.4 Health Check
+
+```http
+GET /health
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "status": "Healthy",
+  "version": "1.0.0",
+  "checks": {
+    "database": "Healthy",
+    "redis": "Healthy",
+    "storage": "Healthy"
+  }
+}
+```
+
+---
+
+## 2. Authentication
+
+All authenticated requests require:
+- `Authorization: Bearer <access_token>`
+- `X-Client-Id: UserApp | Website | EmployeeApp | AdminPortal | InspectionApp`
+
+The gateway validates that `X-Client-Id` is present in the token's `allowedClients` claim.
+
+---
+
+### 2.1 User Login — Request OTP
+
+For **User App** and **Website** only. Issues tokens with `accountType: User`.
+
+```http
+POST /v1/auth/user/otp/request
+X-Client-Id: UserApp
+```
+
+**Request**
+
+```json
+{
+  "phone": "+919876543210",
+  "channel": "sms"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `phone` | string | Yes | E.164 format |
+| `channel` | string | No | `sms` (default) or `email` |
+
+| Header | Required value |
+|--------|----------------|
+| `X-Client-Id` | `UserApp` or `Website` |
+
+**Response `202 Accepted`**
+
+```json
+{
+  "data": {
+    "sessionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "expiresInSeconds": 300,
+    "maskedPhone": "+91*****3210"
+  },
+  "traceId": "00-..."
+}
+```
+
+**Errors:** `429` (rate limit), `400` (invalid phone), `403` (wrong `X-Client-Id` — e.g. EmployeeApp not allowed)
+
+---
+
+### 2.2 User Login — Verify OTP
+
+```http
+POST /v1/auth/user/otp/verify
+X-Client-Id: UserApp
+```
+
+**Request**
+
+```json
+{
+  "sessionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "phone": "+919876543210",
+  "otp": "482910"
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+    "refreshToken": "dGhpcyBpcyBhIHJlZnJlc2g...",
+    "expiresInSeconds": 900,
+    "tokenClaims": {
+      "accountType": "User",
+      "clientId": "UserApp",
+      "allowedClients": ["UserApp", "Website"]
+    },
+    "user": {
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "phone": "+919876543210",
+      "fullName": "Rahul Sharma",
+      "email": null,
+      "accountType": "User",
+      "roles": ["user"]
+    }
+  },
+  "traceId": "00-..."
+}
+```
+
+> This token works in **User App** and **Website** only. It is rejected by Employee App, Admin Portal, and Inspection App.
+
+**Errors:** `401 Unauthorized` (invalid/expired OTP)
+
+---
+
+### 2.3 Employee Login
+
+For **Employee App** and **Inspection App**. Issues tokens with `accountType: Employee`.
+
+```http
+POST /v1/auth/employee/login
+X-Client-Id: EmployeeApp
+```
+
+**Request**
+
+```json
+{
+  "username": "priya.menon",
+  "password": "********"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `username` | string | Yes | Employee username or employee code |
+| `password` | string | Yes | Staff password |
+
+| Header | Required value |
+|--------|----------------|
+| `X-Client-Id` | `EmployeeApp` or `InspectionApp` |
+
+**Response `200 OK` — MFA not required**
+
+```json
+{
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+    "refreshToken": "dGhpcyBpcyBhIHJlZnJlc2g...",
+    "expiresInSeconds": 900,
+    "tokenClaims": {
+      "accountType": "Employee",
+      "clientId": "EmployeeApp",
+      "allowedClients": ["EmployeeApp", "InspectionApp"],
+      "roles": ["sales_executive"],
+      "permissions": ["leads:read", "leads:update", "test-drives:execute"]
+    },
+    "user": {
+      "id": "u1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "fullName": "Priya Menon",
+      "accountType": "Employee",
+      "employeeCode": "EMP-042",
+      "hubIds": ["h1a2b3c4-d5e6-7890-abcd-ef1234567890"]
+    }
+  },
+  "traceId": "00-..."
+}
+```
+
+**Response `200 OK` — MFA required**
+
+```json
+{
+  "data": {
+    "mfaRequired": true,
+    "mfaSessionId": "mfa-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "expiresInSeconds": 300
+  },
+  "traceId": "00-..."
+}
+```
+
+**Errors:** `401` (invalid credentials), `423` (account locked), `403` (UserApp/Website/AdminPortal client ID)
+
+---
+
+### 2.4 Employee Login — Verify MFA
+
+```http
+POST /v1/auth/employee/mfa/verify
+X-Client-Id: EmployeeApp
+```
+
+**Request**
+
+```json
+{
+  "mfaSessionId": "mfa-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "totp": "482910"
+}
+```
+
+**Response `200 OK`** — same token shape as §2.3 (without MFA challenge)
+
+---
+
+### 2.5 Admin Login
+
+For **Admin Portal**, **Employee App**, and **Inspection App**. Issues tokens with `accountType: Admin`. MFA is **always required**.
+
+```http
+POST /v1/auth/admin/login
+X-Client-Id: AdminPortal
+```
+
+**Request**
+
+```json
+{
+  "username": "admin",
+  "password": "********"
+}
+```
+
+| Header | Allowed values |
+|--------|----------------|
+| `X-Client-Id` | `AdminPortal`, `EmployeeApp`, or `InspectionApp` |
+
+**Response `200 OK` — MFA challenge (always)**
+
+```json
+{
+  "data": {
+    "mfaRequired": true,
+    "mfaSessionId": "mfa-b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "expiresInSeconds": 300
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 2.6 Admin Login — Verify MFA
+
+```http
+POST /v1/auth/admin/mfa/verify
+X-Client-Id: AdminPortal
+```
+
+**Request**
+
+```json
+{
+  "mfaSessionId": "mfa-b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "totp": "739281"
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+    "refreshToken": "dGhpcyBpcyBhIHJlZnJlc2g...",
+    "expiresInSeconds": 900,
+    "tokenClaims": {
+      "accountType": "Admin",
+      "clientId": "AdminPortal",
+      "allowedClients": ["AdminPortal", "EmployeeApp", "InspectionApp"],
+      "roles": ["super_admin"],
+      "permissions": ["admin:*", "leads:*", "cars:*"]
+    },
+    "user": {
+      "id": "u2b3c4d5-e6f7-8901-bcde-f12345678902",
+      "fullName": "Admin User",
+      "accountType": "Admin",
+      "roles": ["super_admin"]
+    }
+  },
+  "traceId": "00-..."
+}
+```
+
+> Admin tokens grant access to **Admin Portal APIs**, **Employee APIs**, and the **Inspection App** (existing app login updated to accept this token).
+
+---
+
+### 2.7 Refresh Token
+
+```http
+POST /v1/auth/refresh
+X-Client-Id: UserApp
+```
+
+**Request**
+
+```json
+{
+  "refreshToken": "dGhpcyBpcyBhIHJlZnJlc2g..."
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+    "refreshToken": "bmV3IHJlZnJlc2ggdG9rZW4...",
+    "expiresInSeconds": 900,
+    "tokenClaims": {
+      "accountType": "User",
+      "allowedClients": ["UserApp", "Website"]
+    }
+  },
+  "traceId": "00-..."
+}
+```
+
+**Errors:** `403` if `X-Client-Id` not in original token's `allowedClients`
+
+---
+
+### 2.8 Logout
+
+```http
+POST /v1/auth/logout
+Authorization: Bearer <access_token>
+X-Client-Id: UserApp
+```
+
+**Request**
+
+```json
+{
+  "refreshToken": "dGhpcyBpcyBhIHJlZnJlc2g..."
+}
+```
+
+**Response `204 No Content`**
+
+---
+
+### 2.9 Inspection App Authentication (External)
+
+The **Inspection Mobile App already exists**. Its login screen will be updated (outside AssureCars) to call:
+
+1. `POST /v1/auth/employee/login` with `X-Client-Id: InspectionApp` — for technicians
+2. `POST /v1/auth/admin/login` with `X-Client-Id: InspectionApp` — for admin users performing inspections
+
+The returned JWT is stored and sent on subsequent API calls. AssureCars WebAPI validates:
+- Token signature and expiry
+- `X-Client-Id: InspectionApp` ∈ `allowedClients`
+- `accountType` is `Employee` or `Admin` (never `User`)
+
+**Report ingestion webhook** (`POST /v1/integrations/inspection/reports`) uses **HMAC service authentication**, not user JWT — see §12.
+
+---
+
+## 3. Identity & Profile
+
+### 3.1 Get My Profile
+
+```http
+GET /v1/me
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "phone": "+919876543210",
+    "phoneVerified": true,
+    "email": "rahul@example.com",
+    "emailVerified": false,
+    "fullName": "Rahul Sharma",
+    "accountType": "User",
+    "roles": ["user"],
+    "createdAt": "2026-06-01T08:00:00Z"
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 3.2 Update My Profile
+
+```http
+PUT /v1/me
+Authorization: Bearer <access_token>
+```
+
+**Request**
+
+```json
+{
+  "fullName": "Rahul Sharma",
+  "email": "rahul@example.com"
+}
+```
+
+**Response `200 OK`** — same shape as GET `/v1/me`
+
+---
+
+### 3.3 My Test Drives
+
+```http
+GET /v1/me/test-drives?status=Confirmed&limit=10
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": [
+    {
+      "id": "b1c2d3e4-f5a6-7890-bcde-f12345678901",
+      "bookingNumber": "TD-2026-004521",
+      "status": "Confirmed",
+      "mode": "AtHub",
+      "car": {
+        "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+        "title": "Toyota Fortuner 2.8 4x4 AT",
+        "thumbnailUrl": "https://cdn.dealer.example/cars/c1/primary.jpg"
+      },
+      "slot": {
+        "startUtc": "2026-07-19T09:20:00Z",
+        "endUtc": "2026-07-19T09:40:00Z",
+        "hubName": "Whitefield Hub"
+      },
+      "createdAt": "2026-07-11T10:00:00Z"
+    }
+  ],
+  "meta": { "total": 1, "nextCursor": null },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 3.4 My Reservations
+
+```http
+GET /v1/me/reservations
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": [
+    {
+      "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "reservationNumber": "RSV-2026-000892",
+      "status": "Reserved",
+      "holdExpiresAt": "2026-07-13T10:00:00Z",
+      "car": {
+        "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+        "title": "Toyota Fortuner 2.8 4x4 AT",
+        "listPrice": { "amountPaise": 387500000, "display": "₹38.75 L" }
+      },
+      "reservedAt": "2026-07-11T10:00:00Z"
+    }
+  ],
+  "meta": { "total": 1 },
+  "traceId": "00-..."
+}
+```
+
+---
+
+## 4. Cars & Discovery (Public)
+
+### 4.1 Search & Browse Cars
+
+```http
+GET /v1/cars?city=Bengaluru&make=Toyota&fuelType=Diesel&maxPricePaise=400000000&sort=price_asc&page=1&size=20
+```
+
+| Query param | Type | Description |
+|-------------|------|-------------|
+| `q` | string | Free-text search |
+| `city` | string | Filter by hub city |
+| `make` | string | Make name |
+| `model` | string | Model name |
+| `bodyStyle` | string | `SUV`, `Sedan`, etc. |
+| `fuelType` | string | `Petrol`, `Diesel`, etc. |
+| `transmission` | string | `Automatic`, `Manual`, etc. |
+| `minYear` / `maxYear` | int | Registration year range |
+| `maxOdometerKm` | int | Max kilometers |
+| `minPricePaise` / `maxPricePaise` | long | Price range in paise |
+| `hubId` | uuid | Specific hub |
+| `sort` | string | `relevance`, `price_asc`, `price_desc`, `newest`, `low_km`, `distance` |
+| `lat` / `lng` / `radiusKm` | float | Geo filter |
+| `page` / `size` | int | Pagination |
+
+**Response `200 OK`**
+
+```json
+{
+  "data": [
+    {
+      "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "title": "Toyota Fortuner 2.8 4x4 AT · Legender",
+      "year": 2022,
+      "odometerKm": 38400,
+      "fuelType": "Diesel",
+      "transmission": "Automatic",
+      "color": "Pearl White",
+      "listPrice": {
+        "amountPaise": 387500000,
+        "display": "₹38.75 L"
+      },
+      "emiFrom": {
+        "amountPaise": 7210000,
+        "display": "₹72,100/mo"
+      },
+      "certification": {
+        "grade": "A",
+        "overallScore": 96,
+        "badge": "Certified"
+      },
+      "hub": {
+        "id": "h1a2b3c4-d5e6-7890-abcd-ef1234567890",
+        "name": "Whitefield Hub",
+        "city": "Bengaluru"
+      },
+      "primaryImageUrl": "https://cdn.dealer.example/cars/c1/primary.jpg",
+      "status": "Live"
+    }
+  ],
+  "meta": {
+    "total": 142,
+    "nextCursor": null,
+    "facets": {
+      "fuelType": { "Diesel": 86, "Petrol": 42, "Hybrid": 14 },
+      "bodyStyle": { "SUV": 55, "Sedan": 38, "Hatchback": 49 }
+    }
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 4.2 Get Car Detail
+
+```http
+GET /v1/cars/{carId}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "vin": "MA3EYD81S00123456",
+    "registrationNumber": "KA01AB1234",
+    "title": "Toyota Fortuner 2.8 4x4 AT · Legender",
+    "make": "Toyota",
+    "model": "Fortuner",
+    "variant": "2.8 4x4 AT · Legender",
+    "year": 2022,
+    "odometerKm": 38400,
+    "fuelType": "Diesel",
+    "transmission": "Automatic",
+    "bodyStyle": "SUV",
+    "color": "Pearl White",
+    "numberOfOwners": 1,
+    "listPrice": {
+      "amountPaise": 387500000,
+      "display": "₹38.75 L"
+    },
+    "emiFrom": {
+      "amountPaise": 7210000,
+      "display": "₹72,100/mo"
+    },
+    "certification": {
+      "grade": "A",
+      "overallScore": 96,
+      "conditionBand": "Excellent",
+      "badge": "Certified",
+      "inspectionReportId": "3542dba1-0bce-4135-8b31-4b417c0a5a4a"
+    },
+    "hub": {
+      "id": "h1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "name": "Whitefield Hub",
+      "address": "ITPL Main Road, Whitefield",
+      "city": "Bengaluru",
+      "phone": "+918012345678"
+    },
+    "features": ["Sunroof", "Ventilated seats", "360° camera", "6 airbags"],
+    "media": [
+      {
+        "id": "m1",
+        "type": "Photo",
+        "url": "https://cdn.dealer.example/cars/c1/1.jpg",
+        "isPrimary": true
+      }
+    ],
+    "status": "Live",
+    "publishedAt": "2026-07-01T12:00:00Z"
+  },
+  "traceId": "00-..."
+}
+```
+
+**Errors:** `404` (not found or not Live)
+
+---
+
+## 5. Interest & Leads
+
+### 5.1 Express Interest (Buyer)
+
+Creates or merges into an open lead for the car.
+
+```http
+POST /v1/cars/{carId}/interest
+Authorization: Bearer <access_token>
+Idempotency-Key: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+```
+
+**Request**
+
+```json
+{
+  "preferredContact": "phone",
+  "preferredTimeWindow": "evening",
+  "message": "Interested in financing options",
+  "budgetPaise": 400000000
+}
+```
+
+**Response `201 Created`**
+
+```json
+{
+  "data": {
+    "leadId": "l1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "status": "New",
+    "message": "Thank you! A sales executive will contact you shortly.",
+    "assignedExecutive": null,
+    "slaDueAt": "2026-07-11T10:30:00Z"
+  },
+  "traceId": "00-..."
+}
+```
+
+**Notes:** Duplicate interest by same user on same car returns `200` with existing open lead.
+
+---
+
+## 6. Test Drive Booking
+
+### 6.1 Get Available Slots
+
+```http
+GET /v1/cars/{carId}/test-drive/slots?date=2026-07-19&mode=AtHub
+```
+
+| Query | Description |
+|-------|-------------|
+| `date` | Local date `YYYY-MM-DD` |
+| `mode` | `AtHub` or `Doorstep` |
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "date": "2026-07-19",
+    "mode": "AtHub",
+    "hub": {
+      "id": "h1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "name": "Whitefield Hub"
+    },
+    "slots": [
+      {
+        "slotId": "s1a2b3c4-d5e6-7890-abcd-ef1234567890",
+        "startUtc": "2026-07-19T09:00:00Z",
+        "endUtc": "2026-07-19T09:20:00Z",
+        "startLocal": "14:30",
+        "capacity": 3,
+        "available": 2,
+        "label": "2 slots left"
+      },
+      {
+        "slotId": "s2a2b3c4-d5e6-7890-abcd-ef1234567891",
+        "startUtc": "2026-07-19T09:20:00Z",
+        "endUtc": "2026-07-19T09:40:00Z",
+        "startLocal": "14:50",
+        "capacity": 3,
+        "available": 3,
+        "label": "3 slots left"
+      }
+    ]
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 6.2 Book Test Drive
+
+```http
+POST /v1/test-drives
+Authorization: Bearer <access_token>
+Idempotency-Key: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+```
+
+**Request — At Hub**
+
+```json
+{
+  "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "slotId": "s1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "mode": "AtHub"
+}
+```
+
+**Request — Doorstep**
+
+```json
+{
+  "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "slotId": "s3a2b3c4-d5e6-7890-abcd-ef1234567892",
+  "mode": "Doorstep",
+  "doorstepAddress": {
+    "line1": "42, 3rd Cross, HSR Layout",
+    "city": "Bengaluru",
+    "pincode": "560102",
+    "latitude": 12.9116,
+    "longitude": 77.6388
+  }
+}
+```
+
+**Response `201 Created`**
+
+```json
+{
+  "data": {
+    "id": "b1c2d3e4-f5a6-7890-bcde-f12345678901",
+    "bookingNumber": "TD-2026-004521",
+    "status": "Confirmed",
+    "mode": "AtHub",
+    "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "slot": {
+      "slotId": "s1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "startUtc": "2026-07-19T09:20:00Z",
+      "endUtc": "2026-07-19T09:40:00Z"
+    },
+    "otpHint": "OTP sent to +91*****3210",
+    "calendarLinks": {
+      "google": "https://calendar.google.com/...",
+      "ics": "https://api.dealer.example/v1/test-drives/b1c2.../calendar.ics"
+    }
+  },
+  "traceId": "00-..."
+}
+```
+
+**Errors:** `409 Conflict` (slot full — includes `alternates` in extensions)
+
+---
+
+### 6.3 Get Test Drive Booking
+
+```http
+GET /v1/test-drives/{bookingId}
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "b1c2d3e4-f5a6-7890-bcde-f12345678901",
+    "bookingNumber": "TD-2026-004521",
+    "status": "Confirmed",
+    "mode": "AtHub",
+    "car": {
+      "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "title": "Toyota Fortuner 2.8 4x4 AT"
+    },
+    "slot": {
+      "startUtc": "2026-07-19T09:20:00Z",
+      "endUtc": "2026-07-19T09:40:00Z",
+      "hubName": "Whitefield Hub"
+    },
+    "assignedAgent": null,
+    "rowVersion": 1,
+    "createdAt": "2026-07-11T10:00:00Z"
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 6.4 Cancel Test Drive
+
+```http
+POST /v1/test-drives/{bookingId}/cancel
+Authorization: Bearer <access_token>
+```
+
+**Request**
+
+```json
+{
+  "reason": "Schedule conflict"
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "b1c2d3e4-f5a6-7890-bcde-f12345678901",
+    "status": "Cancelled",
+    "message": "Booking cancelled. Slot capacity restored."
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 6.5 Reschedule Test Drive
+
+```http
+POST /v1/test-drives/{bookingId}/reschedule
+Authorization: Bearer <access_token>
+Idempotency-Key: 8d0f7780-8536-51ef-a55c-f18gd2g01bf8
+```
+
+**Request**
+
+```json
+{
+  "newSlotId": "s2a2b3c4-d5e6-7890-abcd-ef1234567891"
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "b1c2d3e4-f5a6-7890-bcde-f12345678901",
+    "status": "Confirmed",
+    "previousSlotId": "s1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "slot": {
+      "slotId": "s2a2b3c4-d5e6-7890-abcd-ef1234567891",
+      "startUtc": "2026-07-19T10:00:00Z",
+      "endUtc": "2026-07-19T10:20:00Z"
+    }
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+## 7. Reservations
+
+### 7.1 Create Reservation (Non-Financial Hold)
+
+```http
+POST /v1/reservations
+Authorization: Bearer <access_token>
+Idempotency-Key: 9e1g8891-9647-62fg-b66d-g29he3h12cg9
+```
+
+**Request**
+
+```json
+{
+  "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "notes": "Ready to visit hub this weekend"
+}
+```
+
+**Response `201 Created`**
+
+```json
+{
+  "data": {
+    "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "reservationNumber": "RSV-2026-000892",
+    "status": "Reserved",
+    "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "holdExpiresAt": "2026-07-13T10:00:00Z",
+    "message": "Car reserved. Our team will contact you to close the deal offline."
+  },
+  "traceId": "00-..."
+}
+```
+
+**Errors:** `409 Conflict` (car already reserved/sold)
+
+```json
+{
+  "type": "https://api.dealer.example/problems/car-unavailable",
+  "title": "Car no longer available",
+  "status": 409,
+  "detail": "This car was just reserved by another buyer.",
+  "traceId": "00-...",
+  "similarCars": ["c2...", "c3..."]
+}
+```
+
+---
+
+### 7.2 Get Reservation
+
+```http
+GET /v1/reservations/{reservationId}
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "reservationNumber": "RSV-2026-000892",
+    "status": "Reserved",
+    "car": {
+      "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "title": "Toyota Fortuner 2.8 4x4 AT",
+      "listPrice": { "amountPaise": 387500000, "display": "₹38.75 L" }
+    },
+    "holdExpiresAt": "2026-07-13T10:00:00Z",
+    "reservedAt": "2026-07-11T10:00:00Z",
+    "rowVersion": 1
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+## 8. Inspection Reports (Buyer)
+
+### 8.1 Get Car Inspection Report Summary
+
+```http
+GET /v1/cars/{carId}/inspection-report
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "reportId": "3542dba1-0bce-4135-8b31-4b417c0a5a4a",
+    "inspectionId": "2348fa87-acf5-45c9-ba34-dd709e88f5b9",
+    "context": "RESALE",
+    "status": "Pass",
+    "inspectedAt": "2026-07-11T14:30:00Z",
+    "vehicle": {
+      "make": "Tata Nexon",
+      "model": "Advanture plus",
+      "year": 2025,
+      "color": "white",
+      "registrationNumber": "KSK",
+      "odometerKm": 35000
+    },
+    "valuation": {
+      "overallScore": 80,
+      "derivedGrade": "B",
+      "conditionBand": "Good",
+      "benchmarkScore": 70,
+      "deltaVsTypical": 10,
+      "marketPosition": "Above typical",
+      "verdict": "Good condition — a sound purchase with only minor negotiation room.",
+      "priceGuidance": "Condition supports pricing at or slightly above the typical asking price.",
+      "damageCount": 0
+    },
+    "categoryRatings": [
+      { "category": "Exterior", "rating": 5 },
+      { "category": "Interior", "rating": 4 },
+      { "category": "Engine", "rating": 4 },
+      { "category": "Electrical", "rating": 4 },
+      { "category": "Tyres", "rating": 4 },
+      { "category": "Suspension", "rating": 4 },
+      { "category": "Safety", "rating": 4 },
+      { "category": "Documentation", "rating": 4 }
+    ],
+    "finalAssessment": {
+      "recommendation": "NO_REPAIR",
+      "remarks": "good"
+    },
+    "pdf": {
+      "available": true,
+      "downloadUrl": "https://api.dealer.example/v1/cars/c1.../inspection-report/pdf",
+      "expiresAt": "2026-07-11T15:30:00Z"
+    }
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 8.2 Download Inspection PDF
+
+Returns a short-lived redirect to pre-signed object storage URL.
+
+```http
+GET /v1/cars/{carId}/inspection-report/pdf
+Authorization: Bearer <access_token>  (optional for Live cars)
+```
+
+**Response `302 Found`**
+
+```http
+Location: https://storage.dealer.example/inspection-reports/3542dba1....pdf?X-Amz-Signature=...
+```
+
+---
+
+## 9. Inspection Services — Sell & PDI (Phase 2)
+
+### 9.1 Submit Inspection Request
+
+```http
+POST /v1/inspection-requests
+Authorization: Bearer <access_token>
+Idempotency-Key: a2h9902-a758-73gh-c77e-h30if4i23dh0
+```
+
+**Request — Sell**
+
+```json
+{
+  "type": "Sell",
+  "vehicle": {
+    "make": "Hyundai",
+    "model": "Creta",
+    "variant": "1.5 SX(O) Turbo",
+    "year": 2020,
+    "registrationNumber": "KA05CD9876",
+    "odometerKm": 45000
+  },
+  "location": {
+    "addressLine": "HSR Layout, Bengaluru",
+    "city": "Bengaluru",
+    "pincode": "560102"
+  },
+  "preferredDate": "2026-07-19"
+}
+```
+
+**Request — PDI**
+
+```json
+{
+  "type": "PDI",
+  "pdiSubtype": "UsedCarOtherDealer",
+  "vehicle": {
+    "make": "Maruti",
+    "model": "Baleno",
+    "year": 2024,
+    "registrationNumber": "KA03EF4567"
+  },
+  "location": {
+    "addressLine": "MG Road showroom vicinity",
+    "city": "Bengaluru"
+  },
+  "preferredDate": "2026-07-20"
+}
+```
+
+**Response `201 Created`**
+
+```json
+{
+  "data": {
+    "id": "ir1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "requestNumber": "INSP-2026-001234",
+    "type": "Sell",
+    "status": "Requested",
+    "vehicle": {
+      "make": "Hyundai",
+      "model": "Creta",
+      "registrationNumber": "KA05CD9876"
+    },
+    "message": "Request received. Pick an inspection slot to continue.",
+    "nextAction": "schedule"
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 9.2 Get Inspection Request
+
+```http
+GET /v1/inspection-requests/{requestId}
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK` — Report Ready**
+
+```json
+{
+  "data": {
+    "id": "ir1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "requestNumber": "INSP-2026-001234",
+    "type": "PDI",
+    "pdiSubtype": "UsedCarOtherDealer",
+    "status": "ReportReady",
+    "appointment": {
+      "scheduledStart": "2026-07-20T06:00:00Z",
+      "address": "MG Road showroom vicinity, Bengaluru"
+    },
+    "inspectionReport": {
+      "reportId": "3542dba1-0bce-4135-8b31-4b417c0a5a4a",
+      "overallScore": 80,
+      "derivedGrade": "B",
+      "pdfDownloadUrl": "https://api.dealer.example/v1/inspection-requests/ir1.../report/pdf"
+    }
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 9.3 List My Inspection Requests
+
+```http
+GET /v1/me/inspection-requests
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": [
+    {
+      "id": "ir1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "requestNumber": "INSP-2026-001234",
+      "type": "Sell",
+      "status": "Scheduled",
+      "vehicleSummary": "Hyundai Creta · KA05CD9876",
+      "createdAt": "2026-07-11T09:00:00Z"
+    }
+  ],
+  "meta": { "total": 1 },
+  "traceId": "00-..."
+}
+```
+
+---
+
+## 10. Employee APIs
+
+> Requires `employee` role. Row-level scoping: executives see assigned leads; hub managers see hub scope.
+
+### 10.1 List My Leads
+
+```http
+GET /v1/employee/leads?status=New&sort=score_desc&page=1&size=20
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": [
+    {
+      "id": "l1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "status": "New",
+      "score": 85,
+      "slaDueAt": "2026-07-11T10:30:00Z",
+      "slaBreached": false,
+      "buyer": {
+        "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "fullName": "Rahul Sharma",
+        "phone": "+919876543210"
+      },
+      "car": {
+        "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+        "title": "Toyota Fortuner 2.8 4x4 AT",
+        "listPrice": { "amountPaise": 387500000, "display": "₹38.75 L" }
+      },
+      "source": "Interest",
+      "createdAt": "2026-07-11T10:00:00Z",
+      "rowVersion": 2
+    }
+  ],
+  "meta": { "total": 12 },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 10.2 Update Lead
+
+```http
+PATCH /v1/employee/leads/{leadId}
+Authorization: Bearer <access_token>
+If-Match: "2"
+```
+
+**Request**
+
+```json
+{
+  "status": "Contacted",
+  "nextAction": "Schedule test drive",
+  "nextActionAt": "2026-07-12T11:00:00Z"
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "l1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "status": "Contacted",
+    "rowVersion": 3,
+    "updatedAt": "2026-07-11T10:15:00Z"
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 10.3 Add Lead Note
+
+```http
+POST /v1/employee/leads/{leadId}/notes
+Authorization: Bearer <access_token>
+```
+
+**Request**
+
+```json
+{
+  "note": "Called buyer — interested in weekend test drive",
+  "disposition": "positive"
+}
+```
+
+**Response `201 Created`**
+
+```json
+{
+  "data": {
+    "id": "n1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "leadId": "l1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "note": "Called buyer — interested in weekend test drive",
+    "disposition": "positive",
+    "authorName": "Priya Menon",
+    "createdAt": "2026-07-11T10:16:00Z"
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 10.4 Today's Schedule
+
+```http
+GET /v1/employee/schedule?date=2026-07-19
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "date": "2026-07-19",
+    "bookings": [
+      {
+        "id": "b1c2d3e4-f5a6-7890-bcde-f12345678901",
+        "bookingNumber": "TD-2026-004521",
+        "status": "Confirmed",
+        "mode": "Doorstep",
+        "startUtc": "2026-07-19T09:20:00Z",
+        "buyer": {
+          "fullName": "Rahul Sharma",
+          "phone": "+919876543210"
+        },
+        "car": { "title": "Toyota Fortuner 2.8 4x4 AT" },
+        "doorstepAddress": "42, 3rd Cross, HSR Layout, Bengaluru"
+      }
+    ]
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 10.5 Update Test Drive Status (En Route)
+
+```http
+PATCH /v1/test-drives/{bookingId}
+Authorization: Bearer <access_token>
+If-Match: "1"
+```
+
+**Request**
+
+```json
+{
+  "status": "EnRoute"
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "b1c2d3e4-f5a6-7890-bcde-f12345678901",
+    "status": "EnRoute",
+    "rowVersion": 2
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 10.6 Check In (OTP Verify)
+
+```http
+POST /v1/test-drives/{bookingId}/checkin
+Authorization: Bearer <access_token>
+```
+
+**Request**
+
+```json
+{
+  "otp": "482910"
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "b1c2d3e4-f5a6-7890-bcde-f12345678901",
+    "status": "CheckedIn",
+    "checkedInAt": "2026-07-19T09:22:00Z"
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 10.7 Complete Test Drive
+
+```http
+POST /v1/test-drives/{bookingId}/complete
+Authorization: Bearer <access_token>
+```
+
+**Request**
+
+```json
+{
+  "feedbackRating": 5,
+  "feedbackText": "Buyer very interested, wants to reserve",
+  "buyerInterestLevel": "high",
+  "odometerKm": 38412
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "b1c2d3e4-f5a6-7890-bcde-f12345678901",
+    "status": "Completed",
+    "completedAt": "2026-07-19T09:45:00Z"
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 10.8 List Active Reservations (Staff)
+
+```http
+GET /v1/employee/reservations?status=Reserved
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": [
+    {
+      "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "reservationNumber": "RSV-2026-000892",
+      "status": "Reserved",
+      "holdExpiresAt": "2026-07-13T10:00:00Z",
+      "buyer": { "fullName": "Rahul Sharma", "phone": "+919876543210" },
+      "car": { "title": "Toyota Fortuner", "vin": "MA3EYD81S00123456" },
+      "rowVersion": 1
+    }
+  ],
+  "meta": { "total": 9 },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 10.9 Update Reservation (Staff)
+
+```http
+PATCH /v1/reservations/{reservationId}
+Authorization: Bearer <access_token>
+If-Match: "1"
+```
+
+**Request — Mark Sold**
+
+```json
+{
+  "status": "Sold",
+  "notes": "Deal closed offline at Whitefield Hub"
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "status": "Sold",
+    "carStatus": "Sold",
+    "closedAt": "2026-07-12T16:00:00Z",
+    "rowVersion": 2
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+## 11. Admin APIs
+
+> Requires `admin` role (catalog admin, hub manager, super admin per permission).
+
+### 11.1 List Cars (Admin)
+
+```http
+GET /v1/admin/cars?status=Live&listingSource=Owned&page=1&size=20
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": [
+    {
+      "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "vin": "MA3EYD81S00123456",
+      "title": "Toyota Fortuner 2.8 4x4 AT",
+      "listingSource": "Owned",
+      "status": "Live",
+      "listPrice": { "amountPaise": 387500000, "display": "₹38.75 L" },
+      "certification": { "grade": "A", "overallScore": 96 },
+      "hub": { "name": "Whitefield Hub" },
+      "publishedAt": "2026-07-01T12:00:00Z",
+      "rowVersion": 5
+    }
+  ],
+  "meta": { "total": 142 },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 11.2 Create Car (Draft)
+
+```http
+POST /v1/admin/cars
+Authorization: Bearer <access_token>
+```
+
+**Request — Owned**
+
+```json
+{
+  "vin": "MA3EYD81S00123456",
+  "registrationNumber": "KA01AB1234",
+  "listingSource": "Owned",
+  "makeId": "m1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "modelId": "md1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "hubId": "h1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "year": 2022,
+  "odometerKm": 38400,
+  "fuelType": "Diesel",
+  "transmission": "Automatic",
+  "color": "Pearl White",
+  "numberOfOwners": 1
+}
+```
+
+**Request — Consigned**
+
+```json
+{
+  "vin": "MA3EYD81S00234567",
+  "listingSource": "ConsignedIndividual",
+  "consignorId": "cn1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "makeId": "m2...",
+  "modelId": "md2...",
+  "hubId": "h1...",
+  "year": 2021,
+  "odometerKm": 52600
+}
+```
+
+**Response `201 Created`**
+
+```json
+{
+  "data": {
+    "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "vin": "MA3EYD81S00123456",
+    "status": "Draft",
+    "listingSource": "Owned",
+    "rowVersion": 0,
+    "createdAt": "2026-07-11T10:00:00Z"
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 11.3 Update Car
+
+```http
+PATCH /v1/admin/cars/{carId}
+Authorization: Bearer <access_token>
+If-Match: "5"
+```
+
+**Request**
+
+```json
+{
+  "listPricePaise": 387500000,
+  "emiFromPaise": 7210000,
+  "features": ["Sunroof", "Ventilated seats", "360° camera"],
+  "odometerKm": 38400
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "status": "Certified",
+    "listPrice": { "amountPaise": 387500000, "display": "₹38.75 L" },
+    "rowVersion": 6
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 11.4 Publish Car
+
+Validates passing inspection report + price before going Live.
+
+```http
+POST /v1/admin/cars/{carId}/publish
+Authorization: Bearer <access_token>
+If-Match: "6"
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "status": "Live",
+    "publishedAt": "2026-07-11T10:30:00Z",
+    "rowVersion": 7
+  },
+  "traceId": "00-..."
+}
+```
+
+**Errors:** `422 Unprocessable Entity`
+
+```json
+{
+  "type": "https://api.dealer.example/problems/publish-gate-failed",
+  "title": "Cannot publish car",
+  "status": 422,
+  "detail": "Publish gate failed.",
+  "traceId": "00-...",
+  "violations": [
+    { "code": "MISSING_INSPECTION_REPORT", "message": "No passing inspection report ingested" },
+    { "code": "MISSING_PRICE", "message": "List price is not set" }
+  ]
+}
+```
+
+---
+
+### 11.5 Delist Car
+
+```http
+POST /v1/admin/cars/{carId}/delist
+Authorization: Bearer <access_token>
+If-Match: "7"
+```
+
+**Request**
+
+```json
+{
+  "reason": "Sent for refurbishment"
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "status": "Delisted",
+    "rowVersion": 8
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 11.6 Consignors
+
+**List**
+
+```http
+GET /v1/admin/consignors?type=Individual&page=1&size=20
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": [
+    {
+      "id": "cn1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "type": "Individual",
+      "name": "Anita Desai",
+      "phone": "+919988776655",
+      "email": "anita@example.com",
+      "company": null,
+      "activeCarsCount": 2
+    }
+  ],
+  "meta": { "total": 18 },
+  "traceId": "00-..."
+}
+```
+
+**Create**
+
+```http
+POST /v1/admin/consignors
+Authorization: Bearer <access_token>
+```
+
+**Request**
+
+```json
+{
+  "type": "Vendor",
+  "name": "AutoTrade Partners",
+  "phone": "+918012345678",
+  "email": "ops@autotrade.example",
+  "company": "AutoTrade Partners Pvt Ltd",
+  "address": "Peenya Industrial Area, Bengaluru"
+}
+```
+
+**Response `201 Created`**
+
+```json
+{
+  "data": {
+    "id": "cn2a2b3c4-d5e6-7890-abcd-ef1234567891",
+    "type": "Vendor",
+    "name": "AutoTrade Partners",
+    "createdAt": "2026-07-11T10:00:00Z"
+  },
+  "traceId": "00-..."
+}
+```
+
+**Update**
+
+```http
+PATCH /v1/admin/consignors/{consignorId}
+Authorization: Bearer <access_token>
+```
+
+---
+
+### 11.7 Hubs
+
+```http
+GET /v1/admin/hubs
+Authorization: Bearer <access_token>
+```
+
+```http
+POST /v1/admin/hubs
+Authorization: Bearer <access_token>
+```
+
+**Create Request**
+
+```json
+{
+  "code": "WF-01",
+  "name": "Whitefield Hub",
+  "addressLine": "ITPL Main Road, Whitefield",
+  "city": "Bengaluru",
+  "state": "Karnataka",
+  "pincode": "560066",
+  "latitude": 12.9698,
+  "longitude": 77.7500,
+  "phone": "+918012345678"
+}
+```
+
+**Response `201 Created`**
+
+```json
+{
+  "data": {
+    "id": "h1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "code": "WF-01",
+    "name": "Whitefield Hub",
+    "city": "Bengaluru",
+    "isActive": true
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 11.8 Slot Templates
+
+```http
+GET /v1/admin/hubs/{hubId}/slot-templates
+Authorization: Bearer <access_token>
+```
+
+```http
+PUT /v1/admin/hubs/{hubId}/slot-templates/{templateId}
+Authorization: Bearer <access_token>
+```
+
+**Request**
+
+```json
+{
+  "name": "Default",
+  "operatingDays": [1, 2, 3, 4, 5, 6],
+  "openTimeLocal": "09:00",
+  "closeTimeLocal": "19:00",
+  "testDriveDurationMin": 20,
+  "bufferMin": 0,
+  "defaultCapacity": 3,
+  "timezone": "Asia/Kolkata"
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "st1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "hubId": "h1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "defaultCapacity": 3,
+    "testDriveDurationMin": 20,
+    "updatedAt": "2026-07-11T10:00:00Z"
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 11.9 Inspection Reports (Admin)
+
+```http
+GET /v1/admin/inspection/reports?status=Unmatched&page=1&size=20
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": [
+    {
+      "id": "3542dba1-0bce-4135-8b31-4b417c0a5a4a",
+      "externalReportId": "3542dba1-0bce-4135-8b31-4b417c0a5a4a",
+      "context": "RESALE",
+      "status": "Unmatched",
+      "vehicleSummary": "Tata Nexon · KSK",
+      "overallScore": 80,
+      "ingestedAt": "2026-07-11T14:35:00Z"
+    }
+  ],
+  "meta": { "total": 1 },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 11.10 Resolve Unmatched Inspection
+
+```http
+POST /v1/admin/inspection/unmatched/{queueId}/resolve
+Authorization: Bearer <access_token>
+```
+
+**Request — Link to car**
+
+```json
+{
+  "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890"
+}
+```
+
+**Request — Link to inspection request**
+
+```json
+{
+  "inspectionRequestId": "ir1a2b3c4-d5e6-7890-abcd-ef1234567890"
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "reportId": "3542dba1-0bce-4135-8b31-4b417c0a5a4a",
+    "status": "Pass",
+    "linkedCarId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "carStatus": "Certified"
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 11.11 Manual Inspection Upload (Fallback)
+
+```http
+POST /v1/admin/inspection/reports/upload
+Authorization: Bearer <access_token>
+Content-Type: multipart/form-data
+```
+
+**Form fields:** `payload` (JSON string), `pdf` (file)
+
+**Response `201 Created`** — same shape as webhook success (§12.1)
+
+---
+
+### 11.12 Ops Dashboard
+
+```http
+GET /v1/admin/dashboard/ops
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "asOf": "2026-07-11T10:00:00Z",
+    "inventory": {
+      "live": 128,
+      "reserved": 9,
+      "certified": 3,
+      "inInspection": 5,
+      "draft": 7
+    },
+    "today": {
+      "testDrivesScheduled": 24,
+      "testDrivesCompleted": 8,
+      "noShows": 2,
+      "activeReservations": 9
+    },
+    "leads": {
+      "new": 15,
+      "slaBreached": 3,
+      "unassigned": 1
+    },
+    "inspections": {
+      "unmatched": 1,
+      "pendingPublish": 5
+    }
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 11.13 Users & RBAC
+
+```http
+GET /v1/admin/users?role=sales_executive
+Authorization: Bearer <access_token>
+```
+
+```http
+POST /v1/admin/users
+Authorization: Bearer <access_token>
+```
+
+**Request**
+
+```json
+{
+  "phone": "+919123456789",
+  "fullName": "Priya Menon",
+  "email": "priya@dealer.example",
+  "roles": ["sales_executive"],
+  "employee": {
+    "employeeCode": "EMP-042",
+    "designation": "Sales Executive",
+    "hubIds": ["h1a2b3c4-d5e6-7890-abcd-ef1234567890"],
+    "isFieldAgent": false
+  }
+}
+```
+
+**Response `201 Created`**
+
+```json
+{
+  "data": {
+    "userId": "u1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "fullName": "Priya Menon",
+    "roles": ["sales_executive"],
+    "employeeId": "e1a2b3c4-d5e6-7890-abcd-ef1234567890"
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 11.14 Dealer Settings
+
+```http
+GET /v1/admin/settings
+Authorization: Bearer <access_token>
+```
+
+```http
+PATCH /v1/admin/settings
+Authorization: Bearer <access_token>
+```
+
+**Request**
+
+```json
+{
+  "dealerName": "AssureCars Bengaluru",
+  "reservationHoldHours": 48,
+  "gradeThresholds": {
+    "A": 95,
+    "B": 80,
+    "C": 70
+  }
+}
+```
+
+---
+
+### 11.15 Feature Flags
+
+```http
+GET /v1/admin/feature-flags
+Authorization: Bearer <access_token>
+```
+
+```http
+PATCH /v1/admin/feature-flags/{code}
+Authorization: Bearer <access_token>
+```
+
+**Request**
+
+```json
+{
+  "enabled": true
+}
+```
+
+---
+
+## 12. Inspection App Integration (Webhook)
+
+> Called by the **external Inspection Mobile App**. Authenticated via HMAC signature, not user JWT.
+
+### 12.1 Ingest Inspection Report (Webhook)
+
+```http
+POST /v1/integrations/inspection/reports
+X-Inspection-Signature: sha256=abc123...
+Content-Type: application/json
+```
+
+**Request**
+
+```json
+{
+  "reportId": "3542dba1-0bce-4135-8b31-4b417c0a5a4a",
+  "inspectionId": "2348fa87-acf5-45c9-ba34-dd709e88f5b9",
+  "context": "RESALE",
+  "inspectionRequestId": null,
+  "inspectedAt": "2026-07-11T14:30:00Z",
+  "vehicle": {
+    "vin": "SA",
+    "category": "OLD",
+    "numberOfOwnerships": null,
+    "numberOfKeys": null,
+    "year": 2025,
+    "manufacturer": null,
+    "make": "tata Nexon",
+    "model": "Advanture plus",
+    "variant": null,
+    "trim": null,
+    "bodyStyle": null,
+    "fuelType": null,
+    "transmission": null,
+    "color": "white",
+    "registrationNumber": "KSK",
+    "engineNumber": null,
+    "chassisNumber": null,
+    "odometerKm": 35000
+  },
+  "finalAssessment": {
+    "categoryRatings": {
+      "Exterior": 5,
+      "Interior": 4,
+      "Engine": 4,
+      "Electrical": 4,
+      "Tyres": 4,
+      "Suspension": 4,
+      "Safety": 4,
+      "Documentation": 4
+    },
+    "overallCondition": null,
+    "recommendation": "NO_REPAIR",
+    "remarks": "good"
+  },
+  "valuation": {
+    "overallScore": 80,
+    "conditionBand": "Good",
+    "benchmarkScore": 70,
+    "deltaVsTypical": 10,
+    "marketPosition": "Above typical",
+    "verdict": "Good condition — a sound purchase with only minor negotiation room.",
+    "priceGuidance": "Condition supports pricing at or slightly above the typical asking price.",
+    "damageCount": 0
+  },
+  "pdfUrl": "https://inspection-app.example/reports/3542dba1.pdf"
+}
+```
+
+**Response `200 OK` — Matched to inventory car**
+
+```json
+{
+  "data": {
+    "assureCarsReportId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "externalReportId": "3542dba1-0bce-4135-8b31-4b417c0a5a4a",
+    "status": "Pass",
+    "derivedGrade": "B",
+    "linkedCarId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "carStatus": "Certified",
+    "pdfStored": true
+  },
+  "traceId": "00-..."
+}
+```
+
+**Response `200 OK` — Idempotent duplicate**
+
+```json
+{
+  "data": {
+    "assureCarsReportId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "externalReportId": "3542dba1-0bce-4135-8b31-4b417c0a5a4a",
+    "status": "Pass",
+    "message": "Report already ingested"
+  },
+  "traceId": "00-..."
+}
+```
+
+**Response `202 Accepted` — Unmatched (parked for admin)**
+
+```json
+{
+  "data": {
+    "assureCarsReportId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "externalReportId": "3542dba1-0bce-4135-8b31-4b417c0a5a4a",
+    "status": "Unmatched",
+    "queueId": "q1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "message": "Report stored; awaiting manual correlation"
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 12.2 Upload PDF (Follow-Up)
+
+When PDF is not sent inline or via `pdfUrl`.
+
+```http
+POST /v1/integrations/inspection/reports/{assureCarsReportId}/pdf
+X-Inspection-Signature: sha256=abc123...
+Content-Type: multipart/form-data
+```
+
+**Form:** `file` = PDF binary
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "assureCarsReportId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "pdfStored": true,
+    "fileSizeBytes": 2457600,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+## 13. Media
+
+### 13.1 Pre-Signed Upload URL
+
+Used by admin (car photos) and employee app (test-drive photos).
+
+```http
+POST /v1/media/presign
+Authorization: Bearer <access_token>
+```
+
+**Request**
+
+```json
+{
+  "purpose": "Listing",
+  "mediaType": "Photo",
+  "fileName": "front-angle.jpg",
+  "contentType": "image/jpeg",
+  "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890"
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "uploadUrl": "https://storage.dealer.example/uploads/...?X-Amz-Signature=...",
+    "storageKey": "cars/c1/front-angle.jpg",
+    "expiresAt": "2026-07-11T11:00:00Z",
+    "headers": {
+      "Content-Type": "image/jpeg"
+    }
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 13.2 Confirm Media Upload (Admin)
+
+```http
+POST /v1/admin/cars/{carId}/media
+Authorization: Bearer <access_token>
+```
+
+**Request**
+
+```json
+{
+  "storageKey": "cars/c1/front-angle.jpg",
+  "mediaType": "Photo",
+  "purpose": "Listing",
+  "isPrimary": true,
+  "sortOrder": 0
+}
+```
+
+**Response `201 Created`**
+
+```json
+{
+  "data": {
+    "id": "m1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "url": "https://cdn.dealer.example/cars/c1/front-angle.jpg",
+    "isPrimary": true
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+## 14. Reviews (Phase 2)
+
+### 14.1 Submit Review
+
+```http
+POST /v1/reviews
+Authorization: Bearer <access_token>
+Idempotency-Key: b3i0013-b869-84hi-d88f-i41jg5j34ei1
+```
+
+**Request**
+
+```json
+{
+  "testDriveBookingId": "b1c2d3e4-f5a6-7890-bcde-f12345678901",
+  "ratingOverall": 5,
+  "ratingCondition": 5,
+  "ratingStaff": 4,
+  "comment": "Car matched the inspection report. Smooth test drive."
+}
+```
+
+**Response `201 Created`**
+
+```json
+{
+  "data": {
+    "id": "rv1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "isVerified": true,
+    "createdAt": "2026-07-19T10:00:00Z"
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 14.2 List Car Reviews
+
+```http
+GET /v1/cars/{carId}/reviews?page=1&size=10
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": [
+    {
+      "id": "rv1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "ratingOverall": 5,
+      "comment": "Car matched the inspection report.",
+      "authorInitials": "R.S.",
+      "createdAt": "2026-07-19T10:00:00Z"
+    }
+  ],
+  "meta": {
+    "total": 12,
+    "averageOverall": 4.6
+  },
+  "traceId": "00-..."
+}
+```
+
+---
+
+## 15. Reference Data & CMS
+
+### 15.1 List Hubs (Public)
+
+```http
+GET /v1/hubs?city=Bengaluru
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": [
+    {
+      "id": "h1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "name": "Whitefield Hub",
+      "address": "ITPL Main Road, Whitefield",
+      "city": "Bengaluru",
+      "latitude": 12.9698,
+      "longitude": 77.7500,
+      "phone": "+918012345678"
+    }
+  ],
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 15.2 Makes & Models
+
+```http
+GET /v1/makes
+GET /v1/makes/{makeId}/models
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": [
+    { "id": "m1...", "name": "Toyota" },
+    { "id": "m2...", "name": "Hyundai" }
+  ],
+  "traceId": "00-..."
+}
+```
+
+---
+
+### 15.3 CMS Banners
+
+```http
+GET /v1/cms/banners
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": [
+    {
+      "id": "bn1...",
+      "title": "Certified. Inspected. Assured.",
+      "subtitle": "Every car passes a 200-point inspection",
+      "imageUrl": "https://cdn.dealer.example/banners/hero.jpg",
+      "linkUrl": "/search"
+    }
+  ],
+  "traceId": "00-..."
+}
+```
+
+---
+
+## 16. Common Schemas
+
+### 16.1 Money
+
+```json
+{
+  "amountPaise": 387500000,
+  "display": "₹38.75 L"
+}
+```
+
+### 16.2 Certification Badge
+
+```json
+{
+  "grade": "A",
+  "overallScore": 96,
+  "conditionBand": "Excellent",
+  "badge": "Certified",
+  "inspectionReportId": "3542dba1-0bce-4135-8b31-4b417c0a5a4a"
+}
+```
+
+### 16.3 Car Summary (embedded)
+
+```json
+{
+  "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "title": "Toyota Fortuner 2.8 4x4 AT",
+  "thumbnailUrl": "https://cdn.dealer.example/cars/c1/primary.jpg",
+  "listPrice": { "amountPaise": 387500000, "display": "₹38.75 L" }
+}
+```
+
+### 16.4 Address
+
+```json
+{
+  "line1": "42, 3rd Cross, HSR Layout",
+  "city": "Bengaluru",
+  "state": "Karnataka",
+  "pincode": "560102",
+  "latitude": 12.9116,
+  "longitude": 77.6388
+}
+```
+
+---
+
+## 17. Error Responses
+
+All errors follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) `application/problem+json`.
+
+### 17.1 Standard Error Shape
+
+```json
+{
+  "type": "https://api.dealer.example/problems/validation-error",
+  "title": "Validation failed",
+  "status": 400,
+  "detail": "One or more fields are invalid.",
+  "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+  "errors": [
+    { "field": "phone", "message": "Invalid E.164 phone number" }
+  ]
+}
+```
+
+### 17.2 HTTP Status Reference
+
+| Status | When |
+|--------|------|
+| `400` | Validation error, malformed request |
+| `401` | Missing/invalid token, bad OTP, bad password |
+| `403` | Insufficient permissions, wrong login type for API, or `X-Client-Id` not in token `allowedClients` |
+| `404` | Resource not found |
+| `409` | Concurrency conflict, slot full, car reserved |
+| `422` | Business rule violation (publish gate) |
+| `429` | Rate limit exceeded |
+| `500` | Unexpected server error |
+
+### 17.3 Wrong Client or Login Type
+
+```json
+{
+  "type": "https://api.dealer.example/problems/forbidden-client",
+  "title": "Token not valid for this client",
+  "status": 403,
+  "detail": "User Login tokens cannot access Employee APIs. Use Employee Login or Admin Login.",
+  "traceId": "00-...",
+  "accountType": "User",
+  "clientId": "EmployeeApp",
+  "allowedClients": ["UserApp", "Website"]
+}
+```
+
+### 17.4 Concurrency Conflict
+
+```json
+{
+  "type": "https://api.dealer.example/problems/concurrency-conflict",
+  "title": "Resource was modified",
+  "status": 409,
+  "detail": "Submit the latest rowVersion and retry.",
+  "traceId": "00-...",
+  "currentRowVersion": 8
+}
+```
+
+---
+
+## Appendix A — Endpoint Index
+
+**Auth column values:** `Guest` · `User` (User Login) · `Employee` (Employee or Admin Login) · `Admin` (Admin Login only) · `HMAC` (service webhook)
+
+| Method | Path | Auth | Phase |
+|--------|------|------|-------|
+| GET | `/health` | Guest | MVP |
+| POST | `/v1/auth/user/otp/request` | Guest | MVP |
+| POST | `/v1/auth/user/otp/verify` | Guest | MVP |
+| POST | `/v1/auth/employee/login` | Guest | MVP |
+| POST | `/v1/auth/employee/mfa/verify` | Guest | MVP |
+| POST | `/v1/auth/admin/login` | Guest | MVP |
+| POST | `/v1/auth/admin/mfa/verify` | Guest | MVP |
+| POST | `/v1/auth/refresh` | Guest | MVP |
+| POST | `/v1/auth/logout` | User / Employee / Admin | MVP |
+| GET/PUT | `/v1/me` | User / Employee / Admin | MVP |
+| GET | `/v1/me/test-drives` | User | MVP |
+| GET | `/v1/me/reservations` | User | MVP |
+| GET | `/v1/me/inspection-requests` | User | Phase 2 |
+| GET | `/v1/cars` | Guest | MVP |
+| GET | `/v1/cars/{id}` | Guest | MVP |
+| GET | `/v1/cars/{id}/inspection-report` | Guest | MVP |
+| GET | `/v1/cars/{id}/inspection-report/pdf` | Guest / User | MVP |
+| GET | `/v1/cars/{id}/test-drive/slots` | Guest | MVP |
+| GET | `/v1/cars/{id}/reviews` | Guest | Phase 2 |
+| POST | `/v1/cars/{id}/interest` | User | MVP |
+| POST | `/v1/test-drives` | User | MVP |
+| GET | `/v1/test-drives/{id}` | User / Employee / Admin | MVP |
+| PATCH | `/v1/test-drives/{id}` | Employee / Admin | MVP |
+| POST | `/v1/test-drives/{id}/cancel` | User | MVP |
+| POST | `/v1/test-drives/{id}/reschedule` | User | MVP |
+| POST | `/v1/test-drives/{id}/checkin` | Employee / Admin | MVP |
+| POST | `/v1/test-drives/{id}/complete` | Employee / Admin | MVP |
+| POST | `/v1/reservations` | User | MVP |
+| GET | `/v1/reservations/{id}` | User / Employee / Admin | MVP |
+| PATCH | `/v1/reservations/{id}` | Employee / Admin | MVP |
+| POST | `/v1/inspection-requests` | User | Phase 2 |
+| GET | `/v1/inspection-requests/{id}` | User | Phase 2 |
+| POST | `/v1/reviews` | User | Phase 2 |
+| GET | `/v1/hubs` | Guest | MVP |
+| GET | `/v1/makes`, `/v1/makes/{id}/models` | Guest | MVP |
+| GET | `/v1/cms/banners` | Guest | MVP |
+| POST | `/v1/media/presign` | Employee / Admin | MVP |
+| GET | `/v1/employee/leads` | Employee / Admin | MVP |
+| PATCH | `/v1/employee/leads/{id}` | Employee / Admin | MVP |
+| POST | `/v1/employee/leads/{id}/notes` | Employee / Admin | MVP |
+| GET | `/v1/employee/schedule` | Employee / Admin | MVP |
+| GET | `/v1/employee/reservations` | Employee / Admin | MVP |
+| GET/POST | `/v1/admin/cars` | Admin | MVP |
+| PATCH | `/v1/admin/cars/{id}` | Admin | MVP |
+| POST | `/v1/admin/cars/{id}/publish` | Admin | MVP |
+| POST | `/v1/admin/cars/{id}/delist` | Admin | MVP |
+| POST | `/v1/admin/cars/{id}/media` | Admin | MVP |
+| GET/POST | `/v1/admin/consignors` | Admin | MVP |
+| PATCH | `/v1/admin/consignors/{id}` | Admin | MVP |
+| GET/POST | `/v1/admin/hubs` | Admin | MVP |
+| GET/PUT | `/v1/admin/hubs/{id}/slot-templates` | Admin | MVP |
+| GET | `/v1/admin/inspection/reports` | Admin | MVP |
+| POST | `/v1/admin/inspection/unmatched/{id}/resolve` | Admin | MVP |
+| POST | `/v1/admin/inspection/reports/upload` | Admin | MVP |
+| GET | `/v1/admin/dashboard/ops` | Admin | MVP |
+| GET/POST | `/v1/admin/users` | Admin | MVP |
+| GET/PATCH | `/v1/admin/settings` | Admin | MVP |
+| GET/PATCH | `/v1/admin/feature-flags` | Admin | MVP |
+| POST | `/v1/integrations/inspection/reports` | HMAC | MVP |
+| POST | `/v1/integrations/inspection/reports/{id}/pdf` | HMAC | MVP |
+
+---
+
+*Related documents: [Solution-Design-Document.md](./Solution-Design-Document.md) · [database/migrations/001_initial_schema.sql](./database/migrations/001_initial_schema.sql)*

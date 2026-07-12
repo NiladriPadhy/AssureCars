@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AssureCars — Interactive UI Prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ================= Top bar ================= -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <span>AssureCars
+        <small>Premium Certified Resale</small>
+      </span>
+    </div>
+
+    <nav class="surface-tabs" id="surfaceTabs">
+      <button data-surface="app" class="active"><span class="ico">📱</span> User App</button>
+      <button data-surface="web"><span class="ico">🖥️</span> Website</button>
+      <button data-surface="admin"><span class="ico">⚙️</span> Admin Panel</button>
+      <button data-surface="emp"><span class="ico">🧰</span> Employee App</button>
+    </nav>
+
+    <div class="topbar-right">
+      <div class="flow-hint" id="flowHint">Flagship flow · <b>Concurrent-slot test-drive booking</b></div>
+      <span class="proto-badge">Prototype</span>
+    </div>
+  </header>
+
+  <!-- ================= Stage / canvas ================= -->
+  <main class="stage" id="stage">
+    <section class="surface-view active" data-view="app" id="view-app"></section>
+    <section class="surface-view" data-view="web" id="view-web"></section>
+    <section class="surface-view" data-view="admin" id="view-admin"></section>
+    <section class="surface-view" data-view="emp" id="view-emp"></section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
