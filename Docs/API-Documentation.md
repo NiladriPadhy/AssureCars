@@ -3,8 +3,8 @@
 **Product:** AssureCars — Premium Certified Used-Car Reseller Platform  
 **API Version:** v1  
 **Base URL:** `https://{dealer-domain}/api/v1`  
-**Status:** Draft — aligned with Solution Design Document v1.7  
-**Last Updated:** 2026-07-11
+**Status:** Draft — aligned with Solution Design Document v1.8  
+**Last Updated:** 2026-07-17
 
 ---
 
@@ -1095,6 +1095,8 @@ Authorization: Bearer <access_token>
 
 ## 8. Inspection Reports (Buyer)
 
+> The buyer-facing endpoint returns a **curated summary** (score, grade, category ratings, PDF). The **complete** inspection data — full checklist, per-photo images, annotations, AI findings, and damage assessments — is captured in the DB (migration `002`) and exposed to staff via the admin endpoint §11.9.1.
+
 ### 8.1 Get Car Inspection Report Summary
 
 ```http
@@ -1657,6 +1659,8 @@ POST /v1/admin/cars
 Authorization: Bearer <access_token>
 ```
 
+> **VIN auto-mapping.** `vin` is **required**. On creation the Catalog service runs `link_inspection_reports_by_vin(carId, vin)`: any `RESALE` inspection report already ingested for that VIN (including reports parked in the unmatched queue) is linked to the new car, its unmatched-queue entry is resolved, and `cars.current_inspection_report_id` is pointed at the latest report. Matching is **case-insensitive**. If a linked report is passing, the car becomes eligible for `Certified`. If no report exists yet, the car stays `Draft` and links automatically when the inspection is later ingested for that VIN. Changing `vin` via `PATCH /v1/admin/cars/{id}` re-runs the same reconciliation.
+
 **Request — Owned**
 
 ```json
@@ -1691,7 +1695,7 @@ Authorization: Bearer <access_token>
 }
 ```
 
-**Response `201 Created`**
+**Response `201 Created`** — no inspection yet for this VIN
 
 ```json
 {
@@ -1700,6 +1704,34 @@ Authorization: Bearer <access_token>
     "vin": "MA3EYD81S00123456",
     "status": "Draft",
     "listingSource": "Owned",
+    "autoLinkedReports": 0,
+    "currentInspectionReportId": null,
+    "rowVersion": 0,
+    "createdAt": "2026-07-11T10:00:00Z"
+  },
+  "traceId": "00-..."
+}
+```
+
+**Response `201 Created`** — inspection already ingested for this VIN (auto-mapped)
+
+```json
+{
+  "data": {
+    "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "vin": "MA3EYD81S00123456",
+    "status": "Draft",
+    "listingSource": "Owned",
+    "autoLinkedReports": 1,
+    "currentInspectionReportId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "autoLinkedReport": {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "externalReportId": "3542dba1-0bce-4135-8b31-4b417c0a5a4a",
+      "status": "Pass",
+      "derivedGrade": "B",
+      "overallScore": 80,
+      "wasUnmatched": true
+    },
     "rowVersion": 0,
     "createdAt": "2026-07-11T10:00:00Z"
   },
@@ -1995,12 +2027,76 @@ Authorization: Bearer <access_token>
       "externalReportId": "3542dba1-0bce-4135-8b31-4b417c0a5a4a",
       "context": "RESALE",
       "status": "Unmatched",
-      "vehicleSummary": "Tata Nexon · KSK",
+      "vin": "MA3EYD81S00123456",
+      "vehicleSummary": "Tata Nexon · KA01AB1234",
       "overallScore": 80,
+      "linkedCarId": null,
       "ingestedAt": "2026-07-11T14:35:00Z"
     }
   ],
   "meta": { "total": 1 },
+  "traceId": "00-..."
+}
+```
+
+> `status` filter accepts `Ingested | Pass | Fail | Superseded | Unmatched`. `vin` is surfaced so admins can spot the VIN a report is waiting on before listing the matching car.
+
+---
+
+### 11.9.1 Get Full Inspection Report (Admin)
+
+Returns the **complete** captured inspection data assembled from the migration `002` tables — everything the Inspection App sent, queryable without touching `raw_payload`.
+
+```http
+GET /v1/admin/inspection/reports/{reportId}
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "externalReportId": "3542dba1-0bce-4135-8b31-4b417c0a5a4a",
+    "externalInspectionId": "2348fa87-acf5-45c9-ba34-dd709e88f5b9",
+    "context": "RESALE",
+    "status": "Pass",
+    "linkedCarId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "inspectedAt": "2026-07-11T14:30:00Z",
+    "ingestedAt": "2026-07-11T14:35:00Z",
+    "vehicle": { "vin": "MA3EYD81S00123456", "make": "Tata Nexon", "model": "Adventure Plus", "year": 2025, "odometerKm": 35000, "registrationNumber": "KA01AB1234" },
+    "details": {
+      "inspector": { "id": "insp-uuid", "displayName": "R. Kumar" },
+      "device": { "model": "Pixel 7", "osVersion": "Android 15", "appVersion": "0.1.0" },
+      "gps": { "lat": 12.9716, "lng": 77.5946 },
+      "inspectionTime": { "createdAt": "2026-07-11T14:10:00Z", "completedAt": "2026-07-11T14:30:00Z" },
+      "scores": { "exterior": 90, "interior": 85, "safety": 88, "cosmetic": 82, "confidence": 95 },
+      "damageSummary": { "totalDamageCount": 1, "bySeverity": { "low": 1, "medium": 0, "high": 0, "critical": 0 } },
+      "integrity": { "potentialFraud": false, "missingImages": [], "duplicateImages": [], "lowQualityImages": [], "suspiciousImages": [] },
+      "overallCondition": "GOOD",
+      "inspectorNotes": "Minor scuff on front bumper.",
+      "finalRecommendation": "NO_REPAIR",
+      "inspectionStatus": "COMPLETED"
+    },
+    "checklist": [
+      { "sectionId": "exterior", "title": "Exterior",
+        "items": [ { "itemId": "front_bumper", "label": "Front Bumper", "status": "MINOR_SCRATCHES", "rating": 4, "damageTypes": ["SCRATCH"], "imageIds": ["img-2"] } ] }
+    ],
+    "images": [
+      { "imageId": "img-1", "section": "EXTERIOR", "position": "front", "captureState": "CAPTURED",
+        "imageUrl": "https://api.dealer.example/v1/admin/inspection/reports/a1b2.../images/img-1",
+        "metadata": { "width": 4032, "height": 3024, "sizeBytes": 2450000, "quality": "HIGH" },
+        "annotations": [ { "shape": "RECT", "damageType": "SCRATCH", "severity": "LOW", "comment": "surface scratch" } ],
+        "aiFindings": [ { "damageType": "SCRATCH", "confidence": 0.87, "severity": "LOW", "boundingBox": { "x": 0.1, "y": 0.2, "w": 0.1, "h": 0.05 }, "reviewRequired": false, "source": "AI" } ] }
+    ],
+    "damageAssessment": [
+      { "imageId": "img-1", "source": "AI", "damageType": "SCRATCH", "severity": "LOW", "component": "Front Bumper", "repairRequired": true, "estimatedCost": 1500.0, "manualVerified": false }
+    ],
+    "finalAssessment": { "categoryRatings": { "Exterior": 5, "Interior": 4 }, "recommendation": "NO_REPAIR", "remarks": "good" },
+    "valuation": { "overallScore": 80, "derivedGrade": "B", "conditionBand": "Good" },
+    "pdf": { "available": true, "downloadUrl": "https://api.dealer.example/v1/admin/inspection/reports/a1b2.../pdf" }
+  },
   "traceId": "00-..."
 }
 ```
@@ -2209,7 +2305,11 @@ X-Inspection-Signature: sha256=abc123...
 Content-Type: application/json
 ```
 
-**Request**
+**Request — complete inspection payload**
+
+The Inspection App sends the **complete** inspection graph (matching its `ReportModels.kt` contract), not just the summary blocks. AssureCars persists **every** section: summary tables (migration `001`) plus the complete-data tables (migration `002` — `inspection_report_details`, `inspection_checklist_items`, `inspection_report_images` + `inspection_image_annotations` / `inspection_image_ai_findings`, `inspection_damage_assessments`). The untouched body is also archived in `inspection_reports.raw_payload`.
+
+`vehicle.vin` is the **inventory correlation key** — used to auto-map the report to a listed car by VIN (see §11.2, §11.10).
 
 ```json
 {
@@ -2219,35 +2319,109 @@ Content-Type: application/json
   "inspectionRequestId": null,
   "inspectedAt": "2026-07-11T14:30:00Z",
   "vehicle": {
-    "vin": "SA",
+    "vin": "MA3EYD81S00123456",
     "category": "OLD",
-    "numberOfOwnerships": null,
-    "numberOfKeys": null,
+    "numberOfOwnerships": 1,
+    "numberOfKeys": 2,
     "year": 2025,
-    "manufacturer": null,
-    "make": "tata Nexon",
-    "model": "Advanture plus",
+    "manufacturer": "Tata Motors",
+    "make": "Tata Nexon",
+    "model": "Adventure Plus",
     "variant": null,
     "trim": null,
-    "bodyStyle": null,
-    "fuelType": null,
-    "transmission": null,
+    "bodyStyle": "SUV",
+    "fuelType": "Petrol",
+    "transmission": "Manual",
     "color": "white",
-    "registrationNumber": "KSK",
+    "registrationNumber": "KA01AB1234",
     "engineNumber": null,
     "chassisNumber": null,
     "odometerKm": 35000
   },
+  "inspector": { "id": "insp-uuid", "displayName": "R. Kumar" },
+  "inspectionTime": { "createdAt": 1752243000000, "completedAt": 1752246600000 },
+  "gps": { "lat": 12.9716, "lng": 77.5946 },
+  "device": { "model": "Pixel 7", "osVersion": "Android 15", "appVersion": "0.1.0" },
+  "scores": { "exterior": 90, "interior": 85, "safety": 88, "cosmetic": 82, "confidence": 95 },
+  "damageSummary": {
+    "totalDamageCount": 1,
+    "bySeverity": { "low": 1, "medium": 0, "high": 0, "critical": 0 }
+  },
+  "integrity": {
+    "missingImages": [],
+    "duplicateImages": [],
+    "lowQualityImages": [],
+    "suspiciousImages": [],
+    "potentialFraud": false
+  },
+  "overallCondition": "GOOD",
+  "inspectorNotes": "Minor scuff on front bumper.",
+  "finalRecommendation": "NO_REPAIR",
+  "inspectionStatus": "COMPLETED",
+  "checklist": [
+    {
+      "sectionId": "exterior",
+      "title": "Exterior",
+      "items": [
+        {
+          "itemId": "front_bumper",
+          "label": "Front Bumper",
+          "status": "MINOR_SCRATCHES",
+          "rating": 4,
+          "numericValue": null,
+          "unit": null,
+          "textValue": null,
+          "damageTypes": ["SCRATCH"],
+          "images": [
+            { "imageId": "img-2", "section": "EXTERIOR", "position": "front_bumper",
+              "checklistItemId": "front_bumper", "captureState": "CAPTURED",
+              "imageUrl": "https://inspection-app.example/img/img-2.jpg",
+              "metadata": { "width": 4032, "height": 3024, "sizeBytes": 2100000,
+                            "capturedAt": 1752243600000, "orientation": 0, "quality": "HIGH" },
+              "annotations": [], "aiFindings": [] }
+          ]
+        }
+      ]
+    }
+  ],
+  "images": [
+    {
+      "imageId": "img-1",
+      "section": "EXTERIOR",
+      "position": "front",
+      "checklistSectionId": null,
+      "checklistItemId": null,
+      "checklistItem": null,
+      "documentType": null,
+      "captureState": "CAPTURED",
+      "skipReason": null,
+      "thumbnailUrl": "https://inspection-app.example/img/img-1-thumb.jpg",
+      "imageUrl": "https://inspection-app.example/img/img-1.jpg",
+      "metadata": { "width": 4032, "height": 3024, "sizeBytes": 2450000,
+                    "capturedAt": 1752243300000, "orientation": 0, "quality": "HIGH" },
+      "annotations": [
+        { "shape": "RECT", "geometry": "{\"x\":0.1,\"y\":0.2,\"w\":0.1,\"h\":0.05}",
+          "damageType": "SCRATCH", "severity": "LOW", "comment": "surface scratch" }
+      ],
+      "aiFindings": [
+        { "damageType": "SCRATCH", "confidence": 0.87, "severity": "LOW",
+          "boundingBox": { "x": 0.1, "y": 0.2, "w": 0.1, "h": 0.05 },
+          "repairRecommendation": "MINOR_REPAIR", "reviewRequired": false, "source": "AI" }
+      ]
+    }
+  ],
+  "damageAssessment": [
+    { "imageId": "img-1", "section": "EXTERIOR", "position": "front",
+      "checklistItemId": "front_bumper", "checklistItem": "Front Bumper",
+      "source": "AI", "damageType": "SCRATCH", "severity": "LOW",
+      "component": "Front Bumper", "vehicleSide": "FRONT", "estimatedSize": "small",
+      "confidence": 0.87, "repairRequired": true, "estimatedCost": 1500.0,
+      "manualVerified": false }
+  ],
   "finalAssessment": {
     "categoryRatings": {
-      "Exterior": 5,
-      "Interior": 4,
-      "Engine": 4,
-      "Electrical": 4,
-      "Tyres": 4,
-      "Suspension": 4,
-      "Safety": 4,
-      "Documentation": 4
+      "Exterior": 5, "Interior": 4, "Engine": 4, "Electrical": 4,
+      "Tyres": 4, "Suspension": 4, "Safety": 4, "Documentation": 4
     },
     "overallCondition": null,
     "recommendation": "NO_REPAIR",
@@ -2266,6 +2440,23 @@ Content-Type: application/json
   "pdfUrl": "https://inspection-app.example/reports/3542dba1.pdf"
 }
 ```
+
+**Payload sections → storage**
+
+| Payload section | Persisted to |
+|-----------------|--------------|
+| `reportId`, `inspectionId`, `context`, `inspectedAt` | `inspection_reports` |
+| `vehicle` | `inspection_report_vehicles` (VIN = correlation key) |
+| `inspector`, `device`, `gps`, `inspectionTime`, `scores`, `damageSummary`, `integrity`, `overallCondition`, `inspectorNotes`, `finalRecommendation`, `inspectionStatus` | `inspection_report_details` |
+| `checklist[]` | `inspection_checklist_items` |
+| `images[]` + `checklist[].items[].images[]` | `inspection_report_images` (+ binaries in object storage) |
+| `images[].annotations[]` | `inspection_image_annotations` |
+| `images[].aiFindings[]` | `inspection_image_ai_findings` |
+| `damageAssessment[]` | `inspection_damage_assessments` |
+| `finalAssessment` | `inspection_final_assessments` + `inspection_category_ratings` |
+| `valuation` | `inspection_valuations` |
+| PDF (via `pdfUrl` / follow-up upload) | `inspection_report_files` + object storage |
+| *(entire body)* | `inspection_reports.raw_payload` |
 
 **Response `200 OK` — Matched to inventory car**
 
@@ -2728,6 +2919,7 @@ All errors follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) `app
 | GET/POST | `/v1/admin/hubs` | Admin | MVP |
 | GET/PUT | `/v1/admin/hubs/{id}/slot-templates` | Admin | MVP |
 | GET | `/v1/admin/inspection/reports` | Admin | MVP |
+| GET | `/v1/admin/inspection/reports/{id}` | Admin | MVP |
 | POST | `/v1/admin/inspection/unmatched/{id}/resolve` | Admin | MVP |
 | POST | `/v1/admin/inspection/reports/upload` | Admin | MVP |
 | GET | `/v1/admin/dashboard/ops` | Admin | MVP |

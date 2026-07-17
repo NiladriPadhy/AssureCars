@@ -3,7 +3,7 @@
 **Product:** AssureCars — Premium Certified Used-Car Reseller Platform
 **Business Inspiration:** [Cars24](https://www.cars24.com/), [Spinny](https://www.spinny.com/)
 **Document Type:** Solution / High-Level & Low-Level Design (HLD + LLD)
-**Version:** 1.7
+**Version:** 1.8
 **Status:** Draft for Review
 
 ---
@@ -15,7 +15,7 @@
 | Author | Solution Architecture Team |
 | Reviewers | Product, Engineering, Security, DevOps, Business |
 | Audience | Engineering, QA, DevOps, Product, Business Stakeholders |
-| Last Updated | 2026-07-11 (auth model v1.7) |
+| Last Updated | 2026-07-17 (complete inspection-data capture v1.8) |
 
 ### 1.1 Revision History
 
@@ -30,6 +30,7 @@
 | 1.5 | 2026-07-08 | Architecture | Scope capped at Phase 2 — removed Phase 3 (Financial) & Phase 4 (Scale) as committed requirements; financial workflows relabelled out-of-scope/future |
 | 1.6 | 2026-07-11 | Architecture | Full PostgreSQL schema (DDL) for prototype baseline; Inspection App JSON contract confirmed; normalized inspection report tables + PDF storage |
 | 1.7 | 2026-07-11 | Architecture | Three login types (User / Employee / Admin) with client-access matrix; User→User App+Website; Employee→Employee App+Inspection App; Admin→Admin Portal+Employee App+Inspection App |
+| 1.8 | 2026-07-17 | Architecture | **Complete inspection-data capture** — persist the full inspection graph (per-photo images + metadata, manual annotations, AI findings, full checklist responses, damage assessments, scores, integrity signals) as first-class tables alongside the PDF, not just `raw_payload`; **every inspection keyed to a VIN**; formalized **"list a car by VIN → auto-map inspection"** admin flow with bidirectional correlation (migration `002_inspection_complete_data.sql`) |
 
 ---
 
@@ -491,20 +492,40 @@ The Inspection App emits structured JSON plus a PDF. AssureCars ingests both via
 }
 ```
 
-**Field mapping**
+> **Note — the confirmed contract is richer than the sample above.** The Inspection App emits the full report graph (see `core/data/report/ReportModels.kt` in the Inspection App and API §12.1): top-level `inspector`, `device`, `gps`, `inspectionTime`, `scores`, `damageSummary`, `integrity`, `overallCondition`, `inspectorNotes`, `finalRecommendation`, `inspectionStatus`, plus arrays `images[]`, `checklist[]`, and `damageAssessment[]`. As of **v1.8** the **complete** graph is normalized into first-class tables (migration `002`), not just archived in `raw_payload`.
+
+**Field mapping — summary (migration 001)**
 
 | Inspection App JSON | Database target | Notes |
 |---------------------|-----------------|-------|
 | `reportId` | `inspection_reports.external_report_id` | Unique; idempotency key for webhook |
 | `inspectionId` | `inspection_reports.external_inspection_id` | Unique |
 | `context` | `inspection_reports.context` | `RESALE` → inventory cert; `SELL` / `PDI` when request-driven |
-| `vehicle.*` | `inspection_report_vehicles` | Snapshot at inspection time; not the catalog `cars` row |
+| `inspectedAt` | `inspection_reports.inspected_at` | ISO-8601 |
+| `vehicle.*` | `inspection_report_vehicles` | Snapshot at inspection time; **`vehicle.vin` is the inventory correlation key** — not the catalog `cars` row |
 | `finalAssessment.categoryRatings` | `inspection_category_ratings` | One row per category |
 | `finalAssessment.recommendation` | `inspection_final_assessments.recommendation` | Drives pass/fail gate |
 | `finalAssessment.remarks` | `inspection_final_assessments.remarks` | |
 | `valuation.*` | `inspection_valuations` | Powers score ring + grade badge in UI |
 | *(PDF file)* | `inspection_report_files` | Binary in object storage; metadata in DB |
-| *(entire payload)* | `inspection_reports.raw_payload` | JSONB archive |
+| *(entire payload)* | `inspection_reports.raw_payload` | JSONB archive (anti-corruption layer) |
+
+**Field mapping — complete data (migration 002, v1.8)**
+
+| Inspection App JSON | Database target | Notes |
+|---------------------|-----------------|-------|
+| `inspector`, `device`, `gps`, `inspectionTime` | `inspection_report_details` | 1:1 with report; inspector/device/GPS/timing |
+| `scores.*` (exterior/interior/safety/cosmetic/confidence) | `inspection_report_details.*_score` | Aggregate scores 0–100 |
+| `damageSummary.*` (total + bySeverity) | `inspection_report_details.damage_*_count` | Precomputed severity counts |
+| `integrity.*` (missing/duplicate/lowQuality/suspicious/potentialFraud) | `inspection_report_details.integrity_*` | Fraud/quality signals |
+| `overallCondition`, `inspectorNotes`, `finalRecommendation`, `inspectionStatus` | `inspection_report_details.*` | Report-level verdicts |
+| `checklist[].items[]` | `inspection_checklist_items` | One row per answered item, retains `section_id`/`section_title` |
+| `images[]` **and** `checklist[].items[].images[]` | `inspection_report_images` | Every photo/video + metadata; `checklist_item_id` links item photos; binaries in object storage |
+| `images[].annotations[]` | `inspection_image_annotations` | Manual damage markups per image |
+| `images[].aiFindings[]` | `inspection_image_ai_findings` | AI detections + bounding boxes per image |
+| `damageAssessment[]` | `inspection_damage_assessments` | Consolidated AI + manual damage list |
+
+This makes the entire inspection queryable in SQL (e.g. "all cars with a high-severity door-panel finding") without parsing JSON at read time, while `raw_payload` remains the loss-less archive.
 
 **Context routing**
 
@@ -1117,6 +1138,25 @@ CREATE TABLE idempotency_keys (
 );
 ```
 
+### 9.3.1 Complete Inspection Data (migration `002_inspection_complete_data.sql`)
+
+The v1 baseline (§9.3) normalizes only the inspection **summary**. Migration `002` persists the **complete** inspection graph so nothing is trapped in `raw_payload`. Implement as `database/migrations/002_inspection_complete_data.sql` (forward-only, runs after `001`).
+
+| Table | Cardinality | Captures |
+|-------|-------------|----------|
+| `inspection_report_details` | 1:1 with `inspection_reports` | inspector, device, GPS, timing, aggregate scores, damage summary counts, integrity signals, report-level verdicts |
+| `inspection_checklist_items` | many per report | full checklist responses (status / rating / numeric / text / damage types), grouped by section |
+| `inspection_report_images` | many per report | every photo/video: section, position, checklist linkage, capture state, storage keys/URLs, dimensions, quality, hash |
+| `inspection_image_annotations` | many per image | manual damage markups (shape, geometry, type, severity, comment) |
+| `inspection_image_ai_findings` | many per image | AI detections (type, confidence, severity, bounding box, review flag) |
+| `inspection_damage_assessments` | many per report | consolidated AI + manual damage list rendered in the report |
+
+**Design choices**
+
+- App-originated vocabularies (`capture_state`, `quality`, damage `type`/`severity`/`source`, checklist `status`) are stored as `TEXT`, not PG `ENUM`, so the anti-corruption layer absorbs new values without a schema migration.
+- Image **binaries** live in object storage (same private-bucket policy as the PDF); `inspection_report_images` records the `storage_key` / `url` / `sha256_hash` metadata.
+- `002` also adds `idx_inspection_report_vehicles_vin` and the `link_inspection_reports_by_vin(car_id, vin)` helper that powers the VIN auto-map flow (§10.2, §10.14).
+
 ### 9.4 Key Indexes & Constraints Summary
 
 | Rule | Implementation |
@@ -1128,6 +1168,9 @@ CREATE TABLE idempotency_keys (
 | Inspection webhook idempotency | `UNIQUE (external_report_id)` on `inspection_reports` |
 | PDF one-to-one with report | `UNIQUE (inspection_report_id)` on `inspection_report_files` |
 | Consigned cars need consignor | `chk_consigned_requires_consignor` on `cars` |
+| Inspection ↔ VIN lookup | `idx_inspection_report_vehicles_vin` on `inspection_report_vehicles(vin)` (002) |
+| One checklist item row per report+item | `UNIQUE (inspection_report_id, item_id)` on `inspection_checklist_items` (002) |
+| One image row per report+image | `UNIQUE (inspection_report_id, external_image_id)` on `inspection_report_images` (002) |
 
 ### 9.5 Entity Relationship Notes
 
@@ -1135,6 +1178,8 @@ CREATE TABLE idempotency_keys (
 - **`inspection_report_vehicles`** is a **point-in-time snapshot** from the Inspection App. Catalog fields on `cars` may be enriched from this snapshot during onboarding but are independently editable by admins.
 - **`inspection_valuations.overall_score`** drives the prototype's score ring (e.g., 80/100) and **`derived_grade`** (e.g., B) for list cards.
 - **`inspection_category_ratings`** powers the summary rows in car detail (Engine, Tyres, etc.) without parsing JSON at read time.
+- **Complete data (v1.8):** `inspection_report_details` (1:1), `inspection_checklist_items`, `inspection_report_images` → `inspection_image_annotations` / `inspection_image_ai_findings`, and `inspection_damage_assessments` hang off `inspection_reports` via `ON DELETE CASCADE`, so a report and its full graph are stored and removed atomically.
+- **VIN is the inventory correlation key.** `inspection_report_vehicles.vin` maps every inspection to a car; matching is **case-insensitive** and works in both directions — report-arrives-first (parked Unmatched, linked when the car is created) and car-exists-first (linked at ingest). `cars.current_inspection_report_id` is (re)pointed to the latest linked report by `link_inspection_reports_by_vin()`.
 - **Sell/PDI flow:** `inspection_requests` is created first; appointment scheduled; Inspection App receives `inspectionRequestId`; on ingest, report links back and optionally creates `cars` row (Sell acceptance).
 
 ---
@@ -1317,21 +1362,50 @@ flowchart LR
     J --> L[Visible in Search/Website/App]
 ```
 
-> Inspection is performed in the **existing Inspection Mobile App**, not in AssureCars. AssureCars consumes the resulting **PDF report + structured summary** through the integration described in **§10.14**, then links it to the car as the `INSPECTION_REPORT`.
+> Inspection is performed in the **existing Inspection Mobile App**, not in AssureCars. AssureCars consumes the resulting **PDF report + complete structured data** through the integration described in **§10.14**, then links it to the car as the `INSPECTION_REPORT`.
+
+#### VIN-Based Inspection Auto-Mapping
+
+The admin never manually stitches an inspection to a car. **VIN is the single correlation key.** When an admin **lists a car by entering its VIN** (create or VIN edit), the Catalog service immediately reconciles any inspection reports already ingested for that VIN — regardless of whether the report or the car arrived first.
+
+```mermaid
+sequenceDiagram
+    actor A as Catalog Admin
+    participant ADM as Admin Panel
+    participant CAT as Catalog Svc
+    participant DB as PostgreSQL
+
+    A->>ADM: List car → enter VIN
+    ADM->>CAT: POST /v1/admin/cars { vin, listingSource, ... }
+    CAT->>DB: INSERT cars (status=Draft)
+    CAT->>DB: SELECT link_inspection_reports_by_vin(car_id, vin)
+    Note over DB: link every RESALE report where<br/>inspection_report_vehicles.vin = car.vin<br/>(case-insensitive), resolve unmatched queue,<br/>set cars.current_inspection_report_id
+    DB-->>CAT: n reports linked
+    alt a passing report was linked
+        CAT-->>ADM: 201 Created { autoLinkedReport: {...}, status can advance to Certified }
+    else no report yet
+        CAT-->>ADM: 201 Created { car in Draft, awaits inspection }
+    end
+```
+
+- **Report arrives first (common):** technician inspects before the car is listed → report is parked in `inspection_unmatched_queue`. The instant the admin lists that VIN, the report auto-links and leaves the queue.
+- **Car exists first:** the car is listed (Draft), then the inspection is ingested → the ingestion path (§10.14) matches by VIN at ingest time.
+- Matching is **case-insensitive** on VIN and scoped to `context = RESALE`. Sell/PDI reports correlate by `inspectionRequestId` instead.
+- Re-listing/VIN correction re-runs the same reconciliation; superseded reports keep their history.
 
 **Key APIs**
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/v1/admin/cars` | Create draft car (requires `listingSource`; `consignorId` if consigned) |
-| PATCH | `/v1/admin/cars/{id}` | Update attributes/pricing/source |
+| POST | `/v1/admin/cars` | Create draft car (requires `vin` + `listingSource`; `consignorId` if consigned). **Auto-maps any inspection report(s) already ingested for that VIN** |
+| PATCH | `/v1/admin/cars/{id}` | Update attributes/pricing/source. Changing `vin` re-runs VIN auto-mapping |
 | POST | `/v1/admin/cars/{id}/publish` | Move to Live (validates report + price) |
 | GET | `/v1/cars/{id}` | Public detail (Live only) |
 | GET | `/v1/cars/{id}/inspection-report` | Certified inspection report |
 | GET/POST | `/v1/admin/consignors` | List/create consignors (vendor/individual) |
 | PATCH | `/v1/admin/consignors/{id}` | Update consignor details |
 
-**Edge cases:** VIN uniqueness enforced; **consigned sources require a linked consignor**; **publishing is blocked for ANY source without an ingested, passing inspection report** (+ price); concurrent edits use `row_version`. **No commission fields anywhere** (out of scope).
+**Edge cases:** VIN uniqueness enforced; **VIN is mandatory at creation** (it is the inspection correlation key); **consigned sources require a linked consignor**; **publishing is blocked for ANY source without an ingested, passing inspection report** (+ price); listing a VIN auto-links pending inspection reports (see above); concurrent edits use `row_version`. **No commission fields anywhere** (out of scope).
 
 ---
 
@@ -1852,7 +1926,7 @@ flowchart LR
 
 ### 10.14 Module: Inspection App Integration (External System)
 
-**Purpose:** Ingest the **well-designed PDF inspection report** (and structured summary) produced by the **existing Inspection Mobile App**, store it, and route it to the right consumer. A single integration serves **three consumers**:
+**Purpose:** Ingest the **well-designed PDF inspection report** *and the complete structured inspection data* produced by the **existing Inspection Mobile App**, persist both, and route them to the right consumer by **VIN** (inventory) or request reference (Sell/PDI). A single integration serves **three consumers**:
 
 1. **Inventory certification** — attach to a `Car`; **mandatory for all sourcing** and gates publishing to Live (§10.2).
 2. **Sell request** — attach to the `INSPECTION_REQUEST`; supports the acquisition offer and pre-fills the report when the car is later created.
@@ -1917,7 +1991,7 @@ sequenceDiagram
 
 **Webhook payload (confirmed — Inspection App contract)**
 
-The Inspection App sends **structured JSON + PDF** (either inline multipart or a follow-up upload / `pdfUrl`). Top-level shape:
+The Inspection App sends the **complete structured JSON + PDF** (either inline multipart or a follow-up upload / `pdfUrl`). Beyond the summary blocks, the body carries the full inspection graph — `inspector`, `device`, `gps`, `inspectionTime`, `scores`, `damageSummary`, `integrity`, `overallCondition`, `inspectorNotes`, `finalRecommendation`, `inspectionStatus`, and the arrays `images[]`, `checklist[]`, `damageAssessment[]` (full field list in API §12.1). Top-level shape:
 
 ```json
 {
@@ -1926,7 +2000,15 @@ The Inspection App sends **structured JSON + PDF** (either inline multipart or a
   "context": "RESALE",
   "inspectionRequestId": null,
   "inspectedAt": "2026-07-11T14:30:00Z",
-  "vehicle": { "...": "see §9.2" },
+  "vehicle": { "vin": "…", "...": "see §9.2" },
+  "inspector": { "id": "…", "displayName": "…" },
+  "device": { "model": "…", "osVersion": "…", "appVersion": "…" },
+  "scores": { "exterior": 90, "interior": 85, "safety": 88, "cosmetic": 82, "confidence": 95 },
+  "damageSummary": { "totalDamageCount": 0, "bySeverity": { "low": 0, "medium": 0, "high": 0, "critical": 0 } },
+  "integrity": { "missingImages": [], "duplicateImages": [], "lowQualityImages": [], "suspiciousImages": [], "potentialFraud": false },
+  "checklist": [ { "sectionId": "exterior", "title": "Exterior", "items": [ { "itemId": "front_bumper", "label": "Front Bumper", "status": "OK", "images": [] } ] } ],
+  "images": [ { "imageId": "img-1", "section": "EXTERIOR", "position": "front", "annotations": [], "aiFindings": [] } ],
+  "damageAssessment": [],
   "finalAssessment": { "...": "see §9.2" },
   "valuation": { "...": "see §9.2" },
   "pdfUrl": "https://inspection-app.example/reports/3542dba1....pdf"
@@ -1952,17 +2034,28 @@ ON POST /integrations/inspection/reports:
   1. VERIFY HMAC signature
   2. IF reportId exists → return 200 existing report (idempotent)
   3. INSERT inspection_reports (status=Ingested, raw_payload=full body)
-  4. INSERT inspection_report_vehicles, inspection_final_assessments,
+  4. INSERT summary tables: inspection_report_vehicles, inspection_final_assessments,
      inspection_category_ratings, inspection_valuations
+  4b. INSERT complete-data tables (migration 002):
+     - inspection_report_details  (inspector, device, gps, timing, scores,
+                                    damageSummary, integrity, verdicts)
+     - inspection_checklist_items (one row per checklist[].items[])
+     - inspection_report_images   (images[] + checklist[].items[].images[];
+                                    store binaries in object storage)
+       → inspection_image_annotations, inspection_image_ai_findings
+     - inspection_damage_assessments (damageAssessment[])
   5. COMPUTE derived_grade from valuation.overallScore (§9.1)
   6. SET status = Pass|Fail based on recommendation + dealer thresholds
   7. FETCH/STORE PDF → inspection_report_files + object storage
   8. ROUTE by context:
-     - RESALE → match car by vehicle.vin OR registrationNumber
-       → set cars.current_inspection_report_id, cars.status=Certified if Pass
+     - RESALE → match car by vehicle.vin (case-insensitive; registrationNumber fallback)
+       → set inspection_reports.car_id, cars.current_inspection_report_id,
+         cars.status=Certified if Pass
      - SELL/PDI → match inspection_requests by inspectionRequestId
        → set request.status=ReportReady
-  9. IF no match → status=Unmatched, insert inspection_unmatched_queue
+  9. IF no RESALE car matches the VIN yet → status=Unmatched,
+     insert inspection_unmatched_queue (auto-links later when the car is
+     listed with that VIN — see §10.2 / link_inspection_reports_by_vin())
   10. EMIT InspectionReportIngested domain event
 ```
 

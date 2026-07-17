@@ -9,7 +9,6 @@ import com.vsp.core.data.local.dao.VehicleDao
 import com.vsp.core.data.local.entity.InspectionEntity
 import com.vsp.core.data.local.entity.InspectionImageEntity
 import com.vsp.core.data.local.entity.VehicleEntity
-import com.vsp.core.datastore.SessionStore
 import com.vsp.core.domain.coroutine.DispatcherProvider
 import com.vsp.core.domain.repository.ExportRepository
 import com.vsp.core.model.AppError
@@ -17,7 +16,6 @@ import com.vsp.core.model.AppResult
 import com.vsp.core.model.ExportResult
 import com.vsp.core.model.config.QuestionnaireConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -48,7 +46,6 @@ class ExportRepositoryImpl @Inject constructor(
     private val imageDao: InspectionImageDao,
     private val responseDao: ChecklistResponseDao,
     private val annotationDao: AnnotationDao,
-    private val sessionStore: SessionStore,
     private val dispatchers: DispatcherProvider,
 ) : ExportRepository {
 
@@ -121,12 +118,11 @@ class ExportRepositoryImpl @Inject constructor(
             }
 
             val first = inspections.first()
-            val orgId = sessionStore.session.first()?.orgId.orEmpty()
             val manifest = BundleManifest(
                 appVersion = APP_VERSION,
-                vendorId = orgId,
+                vendorId = "",
                 exportedAt = System.currentTimeMillis(),
-                inspectorUid = inspectorId,
+                inspectorUid = "",
                 inspectorEmail = "",
                 questionnaireHash = first.checklistHash.orEmpty(),
                 questionnaireVersion = first.checklistVersion ?: 0,
@@ -190,7 +186,9 @@ class ExportRepositoryImpl @Inject constructor(
 
         responses.forEach { r ->
             val loc = locations[r.itemId]
-            val files = imagesByItem[r.itemId]?.joinToString(";") { "${it.id}.jpg" }.orEmpty()
+            val files = imagesByItem[r.itemId]?.joinToString(";") { img ->
+                if (img.mediaType == "VIDEO") "${img.id}.mp4" else "${img.id}.jpg"
+            }.orEmpty()
             sb.append(
                 Csv.row(
                     listOf(
@@ -207,7 +205,7 @@ class ExportRepositoryImpl @Inject constructor(
                 Csv.row(
                     listOf(
                         "ANNOTATION", inspection.id, a.imageId, "", "", "", a.id, a.component ?: "", a.shape, a.severity, "", "", "",
-                        a.comment ?: "", a.damageType, "${a.imageId}.jpg", a.updatedAt.toString(),
+                        a.comment ?: "", a.damageType, annotationImageFile(a.imageId, images), a.updatedAt.toString(),
                     ),
                 ),
             ).append('\n')
@@ -237,6 +235,11 @@ class ExportRepositoryImpl @Inject constructor(
     )
 
     private fun safeFile(hash: String) = hash.replace(Regex("[^A-Za-z0-9_-]"), "_")
+
+    private fun annotationImageFile(imageId: String, images: List<InspectionImageEntity>): String {
+        val img = images.find { it.id == imageId }
+        return if (img?.mediaType == "VIDEO") "$imageId.mp4" else "$imageId.jpg"
+    }
 
     companion object {
         private const val APP_VERSION = "0.2.0"
