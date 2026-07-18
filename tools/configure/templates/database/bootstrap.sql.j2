@@ -11,6 +11,8 @@ INSERT INTO dealer_settings (
   primary_domain,
   default_city,
   reservation_hold_hours,
+  reservation_hold_days,
+  min_publish_score,
   grade_thresholds,
   notification_config
 ) VALUES (
@@ -18,8 +20,10 @@ INSERT INTO dealer_settings (
   '{{ infrastructure.storage.publicBaseUrl }}/branding/logo.png',
   '{{ domains.website }}',
   '{{ dealer.defaultCity }}',
-  48,
-  '{"A": 90, "B": 75, "C": 60}'::jsonb,
+  360,
+  15,
+  70,
+  '{"A": 95, "B": 80, "C": 70}'::jsonb,
   jsonb_build_object(
     'supportPhone', '{{ dealer.supportPhone }}',
     'supportEmail', '{{ dealer.supportEmail }}',

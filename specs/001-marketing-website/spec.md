@@ -100,8 +100,8 @@ A team member can build and deploy the marketing site as static files without a 
 
 - **FR-001**: Site MUST present exactly five module sections: User App, Website, Admin Panel, Employee App, Inspection App.
 - **FR-002**: Each module section MUST include a title, one-line description, technology stack label, and screenshot gallery.
-- **FR-003**: Screenshots for User App, Website, Admin Panel, and Employee App MUST be captured from `prototype/` interactive prototype screens.
-- **FR-004**: Inspection App screenshots MUST visually match the prototype design theme (navy/teal, Inter font).
+- **FR-003**: Screenshots for User App, Website, Admin Panel, Employee App, and Inspection App MUST be captured from `prototype/` interactive prototype screens.
+- **FR-004**: Inspection App screenshots MUST visually match the existing Kotlin Inspection App workflow while using the shared prototype design theme (navy/teal, Inter font).
 - **FR-005**: Site MUST use the AssureCars design tokens from `prototype/styles.css` (navy, teal, ink neutrals, Inter font).
 - **FR-006**: Site MUST be a single-page scrolling experience with anchor navigation to each module section.
 - **FR-007**: Site MUST NOT include pricing, signup, API documentation, or dealer onboarding content.
@@ -127,7 +127,7 @@ A team member can build and deploy the marketing site as static files without a 
 ## Assumptions
 
 - Screenshots are generated at build/setup time from the HTML prototype, not fetched at runtime.
-- Inspection App has no HTML prototype; themed mock screenshots will be created to match the AssureCars visual language.
+- Inspection App is represented as a dedicated `prototype/` surface modeled from the existing Kotlin app's checklist-first workflow.
 - The marketing site is internal/demo use — no SEO optimization or analytics required for MVP.
 - English-only content is sufficient.
 - No authentication or API integration is needed.

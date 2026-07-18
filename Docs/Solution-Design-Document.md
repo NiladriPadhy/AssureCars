@@ -114,7 +114,7 @@ AssureCars has **three login types** and a **hub-centric role hierarchy** on top
 
 | Login type | Auth method | Client applications granted | API access |
 |------------|-------------|----------------------------|------------|
-| **User Login** | OTP (phone/email) | **User App**, **Website** | Public/catalog APIs + user-scoped APIs (`/v1/me`, interest, test drives, reservations, inspection requests) |
+| **User Login** | OTP (phone/email) | **User App**, **Website** | Public/catalog APIs + user-scoped APIs (`/v1/me`, interest, test drives, inspection requests). **No reservation endpoints** |
 | **Employee Login** | Password (+ MFA optional) | **Employee App**, **Inspection App** | Employee-scoped APIs (`/v1/employee/*`) + shared read APIs; Inspection App uses the **same Employee token** *(Inspection App login UI is existing — updated separately to accept AssureCars-issued Employee tokens)* |
 | **Admin Login** | Password + MFA (required) | **Admin Portal only** | All Admin APIs (`/v1/admin/*`), hub-scoped by role |
 
@@ -162,7 +162,7 @@ flowchart LR
 | Actor | Login type / Role | Surface | Hub scope | Responsibilities |
 |-------|-------------------|---------|-----------|------------------|
 | **Guest** | *(none)* | Web, User App | — | Browse & search without login; sees hub info (name/city + distance) |
-| **Registered User (buyer/seller)** | **User Login** (`user`) | Web, User App | — | Interest, test drives, reservations, Sell/PDI requests *(purchase/financing: future scope)* |
+| **Registered User (buyer/seller)** | **User Login** (`user`) | Web, User App | — | Interest, test drives, Sell/PDI requests *(purchase/financing: future scope)*. Users cannot reserve/block vehicles. |
 | **Hub Employee — Sales** | **Employee Login** (`hub_employee`) | Employee App | Assigned hub(s) | Own leads, run test drives, close deals for their hub |
 | **Hub Employee — Test-Drive Agent / Driver** | **Employee Login** (`hub_employee`) | Employee App | Assigned hub(s) | Deliver doorstep test drives, capture start/end, OTP verify |
 | **Hub Employee — Inspection Technician** | **Employee Login** (`hub_employee`) | **Inspection App (external)** | Assigned hub(s) | Perform inspection & generate PDF in the existing Inspection Mobile App |
@@ -184,12 +184,12 @@ flowchart LR
 | Dealership Employee App | Android + iOS | **Flutter** | Hub Employees (Sales, Drivers, Technicians) | **Employee Login** (`hub_employee`) |
 | Customer Website | Web (responsive/SSR) | **Angular (SSR/SSG)** | Registered users, guests | **User Login** (OTP) for authenticated flows |
 | Admin Panel | Web (SPA) | **Angular SPA** | Super Admin, Hub Admins | **Admin Login** (password + MFA) |
-| WebAPI | Backend | **.NET (ASP.NET Core Web API)** or **Node/NestJS** | All clients | Validates JWT `accountType` + `allowedClients` + hub scope |
+| WebAPI | Backend | **ASP.NET Core Web API** | All clients | Validates JWT `accountType` + `allowedClients` + hub scope |
 | **Inspection Mobile App** *(existing / external)* | Android + iOS | *Pre-built — not rebuilt by AssureCars* | Hub Employees (Inspection Technicians) | **Employee Login** *(existing app login updated to federate with AssureCars IdP)* |
 
 > Cross-platform choice rationale in §8.
 
-> **Integration note — Inspection App:** A **Vehicle Inspection Mobile App already exists** and is the **system of record for inspections**. It performs the checklist and generates a **well-designed PDF inspection report**. AssureCars does **not** rebuild inspection capture — it **integrates** to ingest the PDF (plus structured summary metadata) and attach it to the matching car. **Inspection App login** uses **Employee Login** or **Admin Login** (existing app UI updated to federate with AssureCars IdP — see §4.1, §10.1). The Dealership Employee App has **no** inspection-capture module. Full integration design in **§10.14**.
+> **Integration note — Inspection App:** A **Vehicle Inspection Mobile App already exists** and is the **system of record for inspections**. It performs the checklist and generates a **well-designed PDF inspection report**. AssureCars does **not** rebuild inspection capture — it **integrates** to ingest the PDF (plus structured summary metadata) and attach it to the matching car. **Inspection App login uses Employee Login (`hub_employee`) only**; Admin dashboard tokens are rejected. The Dealership Employee App has **no** inspection-capture module. Full integration design in **§10.14**.
 
 ### 5.2 Functional Modules & Release Phase
 
@@ -359,7 +359,7 @@ The stack is chosen so an SMB dealer can **self-host on a single modest server**
 - **Normalized core + JSONB archive:** business entities are relational; the Inspection App's full payload is stored in `inspection_reports.raw_payload` for audit/replay while queryable fields are normalized.
 - **Unique VIN inventory:** one sellable car per VIN; enforced with a partial unique index on active statuses.
 - **Inspection is external:** AssureCars stores ingested reports + PDF references; it does not own checklist line items.
-- **MVP is non-financial:** `reservations` has no payment columns. `orders` / `payments` are future scope (not created in MVP migrations).
+- **MVP is non-financial:** `reservations` may store offline token reference fields for staff display, but has no payment processing, ledger, invoice, settlement, or refund workflow. `orders` / `payments` are future scope (not created in MVP migrations).
 
 ```mermaid
 erDiagram
@@ -1191,7 +1191,7 @@ The v1 baseline (§9.3) normalizes only the inspection **summary**. Migration `0
 |-----------|------|
 | `003_consignor_commission.sql` | `consignors.commission_pct` (reference-only rate; no payout/settlement) |
 | `004_hub_roles_and_scoping.sql` | Canonical roles (`super_admin`/`hub_admin`/`hub_employee`); `consignors.hub_id` (NOT NULL) + same-hub trigger `trg_car_consignor_same_hub`; Sell/PDI `customer_latitude/longitude`, `pincode`, `assigned_hub_id` |
-| `005_reservation_redesign_and_settings.sql` | `dealer_settings.reservation_hold_days` (default 15) + `min_publish_score` (default 70); reservation buyer identity (`user_id` nullable, `buyer_name`/`buyer_phone`, `chk_reservation_buyer_identified`), offline token refs (`token_received`, `token_amount_paise`), `notified_employee_id`; Sell display-only money refs (`inspection_requests.indicative_quote_paise`, `final_offer_paise`); `hubs.daily_inspection_capacity` |
+| `005_reservation_redesign_and_settings.sql` | `dealer_settings.reservation_hold_days` (default 15, Super Admin setting) + `min_publish_score` (default 70); lead-bound reservations (`lead_id` required, `user_id` nullable), offline token refs (`token_received`, `token_amount_paise`), `notified_employee_id`; Sell display-only money refs (`inspection_requests.indicative_quote_paise`, `final_offer_paise`); `hubs.daily_inspection_capacity` |
 
 ### 9.4 Key Indexes & Constraints Summary
 
@@ -1351,7 +1351,7 @@ sequenceDiagram
 - Access token 15 min; refresh token rotated on use; refresh reuse detection → revoke family.
 - **User Login tokens cannot call** `/v1/employee/*` or `/v1/admin/*` — gateway returns `403`.
 - **Employee Login tokens cannot call** `/v1/admin/*` — gateway returns `403`.
-- **Admin Login** is a superset: can call Admin + Employee APIs; Inspection App accepts Admin tokens.
+- **Admin Login** is dashboard-only: can call Admin APIs in its hub/global scope, but cannot call Employee APIs or open the Inspection App.
 - Rate limits on User OTP (3/min, 10/hour/number); lockout + captcha on staff password abuse.
 - Inspection App webhook ingestion uses **HMAC service auth**, not user/employee JWT.
 - **No KYC in MVP** for User Login.
@@ -1812,9 +1812,10 @@ sequenceDiagram
 
 - **Only a Hub Admin reserves** a car (Super Admin can act on any hub). **Hub Employees and Users cannot reserve.**
 - A reservation is placed **after an offline token payment**. The token is recorded as a **display-only reference** (`token_received` flag + optional `token_amount_paise`) — **no ledger/settlement**.
-- **Buyer identity:** the reservation is tied to **either a linked lead/user OR a manually entered buyer name + phone** (walk-in) — enforced by `chk_reservation_buyer_identified`.
+- **Buyer identity:** the reservation is always tied to an **existing open lead** for the same car and hub. Walk-ins must be captured as leads first so reservations stay in the CRM funnel.
 - A **reserved car is fully locked / read-only:** no **Send Interest**, no **test drive**, no **second reservation** — the car is blocked for that one person until it is Sold or released.
-- **Hold period is configurable (default 15 days**, `dealer_settings.reservation_hold_days`). If the Hub Admin does **not mark it Sold within the hold window**, a job **auto-releases** the car back to `Live`.
+- **Hold period is configurable by Super Admin only** (default 15 days, `dealer_settings.reservation_hold_days`). If the Hub Admin does **not mark it Sold within the hold window**, a job **auto-releases** the car back to `Live`.
+- **Mark Sold** shows the remaining offline amount due (`list price - token amount`) as a staff reminder only. No payment integration, ledger, invoice, or settlement is created.
 - **Sold / Release are Hub Admin-only** actions.
 - A **Reserved Vehicles** screen (Hub Admin + Super Admin) lists reserved cars with **days-pending**, and offers **"Notify Employee App"** to ask the assigned Hub Employee (fallback: hub employee pool) to follow up on the **final deal**.
 
@@ -1833,8 +1834,8 @@ sequenceDiagram
     actor E as Hub Employee
 
     B->>HA: Pays token OFFLINE, asks to hold the car
-    HA->>ADM: Reserve car (link lead OR enter buyer name+phone, token flag/amount)
-    ADM->>GW: POST /admin/reservations {carId, buyer, token, idempotencyKey}
+    HA->>ADM: Reserve car (select matching lead, enter token amount)
+    ADM->>GW: POST /admin/reservations {carId, leadId, token, idempotencyKey}
     GW->>R: create reservation (Hub Admin, hub-scoped)
     R->>CAT: Reserve car (optimistic lock)
     CAT->>CAT: UPDATE car SET status=Reserved<br/>WHERE id=? AND status=Live AND row_version=?
@@ -1864,7 +1865,7 @@ sequenceDiagram
 
 - Reservation uses **optimistic concurrency**: `UPDATE car SET status=Reserved WHERE status=Live AND row_version=@v`. Only one request wins; others get `409`. `uq_reservations_active_car` guarantees one active reservation per car.
 - **Configurable hold (default 15 days)** — a job auto-releases stale reservations back to `Live`.
-- **Reserved = locked:** the service layer rejects interest/test-drive/reservation attempts on a `Reserved` car.
+- **Reserved = locked:** the service layer rejects interest/test-drive/reservation attempts on a `Reserved` car. Confirmed future test drives must not proceed unless the reservation is released.
 - **Idempotency key** prevents duplicate reservations on retry.
 - **No payment, no ledger, no refund** — the token and any money handling happen **outside the system**; only a reference flag/amount is stored.
 
@@ -1888,7 +1889,7 @@ stateDiagram-v2
 
 | Method | Endpoint | Who | Description |
 |--------|----------|-----|-------------|
-| POST | `/v1/admin/reservations` | Hub Admin (super_admin) | Reserve a car (buyer via lead or manual; token flag/amount; optimistic-locked, idempotent) |
+| POST | `/v1/admin/reservations` | Hub Admin (super_admin) | Reserve a car against an existing matching lead; token flag/amount; optimistic-locked, idempotent |
 | GET | `/v1/admin/reservations?status=&overdue=` | Hub Admin, Super Admin | **Reserved Vehicles** worklist incl. `daysPending` |
 | GET | `/v1/admin/reservations/{id}` | Hub Admin, Super Admin | Reservation detail |
 | PATCH | `/v1/admin/reservations/{id}` | Hub Admin (super_admin) | Mark `Sold` / `Released` / add notes |

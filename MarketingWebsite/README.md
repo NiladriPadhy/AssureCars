@@ -8,8 +8,8 @@ Single-page Angular showcase of the complete AssureCars platform — five client
 |--------|-------|-------------|
 | User App | Flutter · Android / iOS | Home, Search, Detail, Booking |
 | Website | Angular · SSR / SEO | Home, Listing, Detail |
-| Admin Panel | Angular · Dealer SPA | Dashboard, Inventory, Test-Drive Config |
-| Employee App | Flutter · Field Ops | Schedule, Conduct Drive, Leads |
+| Admin Panel | Angular · Dealer SPA | Dashboard, Inventory, Test-Drive Config, Reservations |
+| Employee App | Flutter · Field Ops | Schedule, Conduct Drive, Leads, Reservation Follow-Up |
 | Inspection App | Kotlin · Android | Checklist, Capture, Report |
 
 ## Quick Start
@@ -20,6 +20,8 @@ npm run capture-screenshots   # Regenerate screenshots from prototype/
 npm start                     # http://localhost:4200
 npm run build                 # Output: dist/MarketingWebsite/
 ```
+
+Inspection App screenshots are captured from the `Inspection App` surface in `../prototype/`, which is modeled from the existing Kotlin product.
 
 ## Design
 

@@ -2,7 +2,8 @@
 
 **Premium Certified Used-Car Reseller Platform**
 
-> **Platform OverView — [Open preview ↗](https://assurecars-marketing.vercel.app/)**
+> **Marketing Website — [Open preview ↗](https://assurecars-marketing.vercel.app/)**  
+> **Interactive Prototype — [Open prototype ↗](https://boisterous-smakager-5b29ff.netlify.app/)**
 
 AssureCars is an enabling-technology product that lets **small-to-medium (SMB) car dealers** run their pre-owned car business online. Each dealer gets their own **self-hosted, single-tenant** deployment — their own website, mobile apps, catalog, leads, and test-drive operations — operated **by the dealer, for the dealer**.
 
@@ -94,7 +95,8 @@ flowchart TB
 
 ## Platform Surfaces
 
-The interactive prototype models all four client surfaces plus the external inspection app integration.
+The interactive prototype models all five client surfaces, including the external Kotlin Inspection App flow.
+The marketing website is a separate Angular 22 showcase deployed from [`MarketingWebsite/`](MarketingWebsite/).
 
 | Surface | Platform | Users | Auth |
 |---------|----------|-------|------|
@@ -365,12 +367,20 @@ AssureCars/
 │   ├── index.html
 │   ├── styles.css
 │   └── app.js
+├── MarketingWebsite/                  ← Angular 22 product marketing site
 ├── Docs/
 │   ├── Solution-Design-Document.md    ← Full HLD + LLD (v3.0)
-│   └── API-Documentation.md           ← REST API reference (v1)
+│   ├── API-Documentation.md           ← REST API reference (v1)
+│   └── Phase-Wise-Development-Plan.md ← Phase-wise engineering delivery plan
 ├── database/
 │   └── migrations/
-│       └── 001_initial_schema.sql     ← PostgreSQL DDL baseline
+│       ├── 001_initial_schema.sql     ← PostgreSQL DDL baseline
+│       ├── 002_inspection_complete_data.sql
+│       ├── 003_consignor_commission.sql
+│       ├── 004_hub_roles_and_scoping.sql
+│       └── 005_reservation_redesign_and_settings.sql
+├── specs/
+│   └── 001-marketing-website/         ← Spec Kit artifacts for MarketingWebsite
 ├── Vehicle-Inspection-Kotlin-Product/ ← Existing inspection app (Kotlin / Android)
 │   ├── README.md
 │   ├── app/
@@ -389,8 +399,10 @@ AssureCars/
 |----------|-------------|
 | [Solution Design Document](Docs/Solution-Design-Document.md) | Complete HLD + LLD — architecture, data model, module workflows, security, deployment |
 | [API Documentation](Docs/API-Documentation.md) | REST API v1 — auth, endpoints, schemas, error codes |
+| [Phase-Wise Development Plan](Docs/Phase-Wise-Development-Plan.md) | Executable phase-wise build plan through Phase 2 |
+| [Marketing Website README](MarketingWebsite/README.md) | Angular 22 marketing site setup and screenshot capture |
 | [Vehicle Inspection App README](Vehicle-Inspection-Kotlin-Product/README.md) | Existing Kotlin inspection app — features, setup, PDF generation |
-| [Database Schema](database/migrations/001_initial_schema.sql) | PostgreSQL initial migration — enums, tables, indexes |
+| [Database Migrations](database/migrations/) | PostgreSQL migration chain `001`-`005` |
 
 ---
 
@@ -420,14 +432,15 @@ Requirements are scoped **through Phase 2 only**. Everything in scope is **non-f
 
 ## Getting Started (Development)
 
-This repository is currently in the **design & prototype phase**. Production application code for the AssureCars platform surfaces (Flutter apps, Angular website, Angular admin, WebAPI) is planned per the Solution Design Document.
+This repository currently contains design docs, the live HTML prototype, the Angular 22 marketing website, database migrations, and the existing Kotlin Inspection App. Production application code for the AssureCars platform surfaces (Flutter apps, Angular website/admin, WebAPI) is planned per the Solution Design Document.
 
 **What you can do today:**
 
 1. **Explore the prototype** — [live preview](https://boisterous-smakager-5b29ff.netlify.app) or `open prototype/index.html` locally (see above)
-2. **Read the design docs** — start with the [Executive Summary](Docs/Solution-Design-Document.md#2-executive-summary)
-3. **Run the Inspection App** — see [`Vehicle-Inspection-Kotlin-Product/README.md`](Vehicle-Inspection-Kotlin-Product/README.md)
-4. **Review the database schema** — [`database/migrations/001_initial_schema.sql`](database/migrations/001_initial_schema.sql)
+2. **Run the marketing website** — `cd MarketingWebsite && npm install && npm start`
+3. **Read the design docs** — start with the [Executive Summary](Docs/Solution-Design-Document.md#2-executive-summary)
+4. **Run the Inspection App** — see [`Vehicle-Inspection-Kotlin-Product/README.md`](Vehicle-Inspection-Kotlin-Product/README.md)
+5. **Review the database migrations** — [`database/migrations/`](database/migrations/)
 
 ---
 

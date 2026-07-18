@@ -1084,23 +1084,23 @@
             <div class="panel">
               <div class="panel-head"><h3>Reserved vehicles</h3><button class="btn btn-primary btn-sm" style="margin-left:auto" data-go="admin-reserveform">+ Reserve a car</button></div>
               <table class="tbl">
-                <thead><tr><th>Car</th><th>Reserved for</th><th>Token</th><th>Days pending</th><th>Status</th><th>Follow-up</th><th>Action</th></tr></thead>
+                <thead><tr><th>Car</th><th>Lead</th><th>Token</th><th>Days pending</th><th>Status</th><th>Follow-up</th><th>Action</th></tr></thead>
                 <tbody>
-                  ${[[cars[1], "Neha Gupta", "₹25,000 ✔", "3 / 15", "Reserved", "amber", "Rahul S."],
-                     [cars[0], "Vikram S. (Lead #LD-90188)", "₹50,000 ✔", "6 / 15", "DealInProgress", "teal", "Meena T."],
-                     [cars[4], "Karan M.", "₹25,000 ✔", "16 / 15", "Overdue", "rose", "—"]].map(r => `
+                  ${[[cars[1], "Neha Gupta · #LD-90205", "₹25,000 ✔", "3 / 15", "Reserved", "amber", "Rahul S.", "₹17.15 L"],
+                     [cars[0], "Vikram S. · #LD-90188", "₹50,000 ✔", "6 / 15", "Deal in progress", "teal", "Meena T.", "₹38.25 L"],
+                     [cars[4], "Karan M. · #LD-90244", "₹25,000 ✔", "16 / 15", "Overdue", "rose", "—", "₹14.65 L"]].map(r => `
                     <tr>
                       <td><div class="car-mini"><div class="car-img ${r[0].grad} thumb">${carSVG()}</div><div><b>${r[0].name}</b><div class="tiny muted">${r[0].hub}</div></div></div></td>
                       <td>${r[1]}</td><td class="tiny">${r[2]}</td>
                       <td><b class="${r[4] === "Overdue" ? "" : ""}" style="color:${r[4] === "Overdue" ? "var(--rose-500)" : "var(--ink-900)"}">${r[3]}</b></td>
                       <td>${chip(r[4], r[5])}</td>
                       <td class="tiny">${r[6] === "—" ? '<button class="btn btn-ghost btn-sm">Notify Employee App</button>' : `Notified ${r[6]}`}</td>
-                      <td><div class="row gap6"><button class="btn btn-primary btn-sm">Mark Sold</button><button class="btn btn-ghost btn-sm">Release</button></div></td>
+                      <td><div class="row gap6"><button class="btn btn-primary btn-sm">Mark Sold · collect ${r[7]}</button><button class="btn btn-ghost btn-sm">Release</button></div></td>
                     </tr>`).join("")}
                 </tbody>
               </table>
             </div>
-            <div class="callout info"><span class="ci">🛈</span><div><b>Hub Admin only.</b> A car is reserved after an <b>offline token</b> (recorded for reference — no payment/ledger). A reserved car is <b>fully locked</b> (no interest / test drive / second reservation). If not marked <b>Sold</b> within the configurable hold (<b>default 15 days</b>), it auto-releases back to <b>Live</b>. Use <b>Notify Employee App</b> to have the assigned Hub Employee follow up on the final deal.</div></div>
+            <div class="callout info"><span class="ci">🛈</span><div><b>Reservation is always against a lead.</b> Hub Admin reserves only after an <b>offline token</b> is received (recorded for reference — no payment/ledger). A reserved car is <b>fully locked</b>; future test drives are not allowed unless the reservation is released. <b>Mark Sold</b> reminds staff of the remaining offline balance to collect.</div></div>
           </div>
         </div>
       </div>
@@ -1116,15 +1116,11 @@
           <div class="admin-content"><div class="two-col">
             <div class="panel"><div class="panel-head"><h3>Reservation details</h3></div><div class="panel-body">
               <div class="field"><label>Car (Live only)</label><select><option>Toyota Fortuner · Whitefield Hub · ₹38.75 L</option><option>Honda City · Indiranagar Hub · ₹14.90 L</option></select></div>
-              <div class="field"><label>Buyer</label><div class="seg"><button class="on">Link a lead</button><button>Enter manually</button></div></div>
-              <div class="field"><label>Lead / enquiry</label><select><option>Vikram Singh · #LD-90188 · Fortuner</option><option>Neha Gupta · #LD-90205 · Creta</option></select></div>
-              <div class="form-grid">
-                <div class="field"><label>Buyer name (if manual)</label><input class="input" placeholder="e.g. Karan Malhotra" /></div>
-                <div class="field"><label>Buyer phone (if manual)</label><input class="input" placeholder="+91 …" /></div>
-              </div>
+              <div class="field"><label>Lead / enquiry (required)</label><select><option>Vikram Singh · #LD-90188 · Fortuner · Negotiation</option><option>Neha Gupta · #LD-90205 · Creta · Test drive completed</option></select></div>
+              <div class="callout amber mb16"><span class="ci">🔒</span><div>The selected lead must match the same car and hub, and must be open. Walk-ins should be captured as a lead first.</div></div>
               <div class="cfg-row"><div class="cfg-label"><b>Token received (offline)</b><span>Reference only — no payment is taken here</span></div><div class="toggle on"></div></div>
               <div class="field"><label>Token amount (reference)</label><input class="input" value="₹25,000" /></div>
-              <div class="field"><label>Hold period</label><select><option>15 days (default)</option><option>7 days</option><option>30 days</option></select></div>
+              <div class="field"><label>Hold period</label><input class="input" value="15 days · set by Super Admin" readonly /></div>
               <div class="row gap8 mt8"><button class="btn btn-primary btn-sm" data-go="admin-res">Reserve car</button><button class="btn btn-ghost btn-sm" data-go="admin-res">Cancel</button></div>
             </div></div>
             <div class="panel"><div class="panel-head"><h3>What happens next</h3></div><div class="panel-body">
@@ -1134,7 +1130,7 @@
                 <div class="tm-item"><div class="tm-t">Notify Employee App</div><div class="tm-s">Assigned Hub Employee follows up on the final deal</div></div>
                 <div class="tm-item"><div class="tm-t">Mark Sold / auto-release</div><div class="tm-s">Sold closes offline; else auto-releases to Live at day 15</div></div>
               </div>
-              <div class="callout info mt12"><span class="ci">🛈</span><div>Buyer is identified by a <b>linked lead</b> or a <b>manual name + phone</b>. All money stays offline.</div></div>
+              <div class="callout info mt12"><span class="ci">🛈</span><div>Buyer is identified by the <b>linked lead</b>. The token and remaining amount are reminders for offline collection only.</div></div>
             </div></div>
           </div></div>
         </div>
@@ -1349,10 +1345,10 @@
               </div>
               <div class="field"><label>Custom domain</label><input class="input" value="premiumcars-bengaluru.com" /></div>
               <div class="form-grid">
-                <div class="field"><label>Reservation hold (days)</label><input class="input" type="number" value="15" /></div>
+                <div class="field"><label>Reservation hold (Super Admin)</label><select><option>15 days (default)</option><option>7 days</option><option>30 days</option></select></div>
                 <div class="field"><label>Min publish score</label><input class="input" type="number" value="70" /></div>
               </div>
-              <div class="tiny muted">Hold = days a reserved car is kept before auto-release. Min publish score = inspection score required (with a passing recommendation) to certify & list a car.</div>
+              <div class="tiny muted">Only Super Admin can change the reservation hold setting. Hub Admins apply the current setting when reserving a lead. Min publish score = inspection score required (with a passing recommendation) to certify & list a car.</div>
             </div></div>
             <div class="panel"><div class="panel-head"><h3>Provider keys</h3></div><div class="panel-body">
               ${[["SMS (MSG91)", "•••• 8842", true], ["Email (SendGrid)", "•••• 1f9c", true], ["Push (FCM)", "Configured", true], ["WhatsApp Business API", "•••• 7c3d", true], ["Maps (Google)", "•••• a1b2", true]].map(p => `<div class="cfg-row" style="padding:12px 0"><div class="cfg-label"><b style="font-size:13.5px">${p[0]}</b><span>${p[1]}</span></div>${p[2] ? chip("Connected", "green") : chip("Add key", "outline")}</div>`).join("")}
@@ -1609,17 +1605,244 @@
       </div></div>
     </div>`;
 
+  // ============================ INSPECTION APP ============================
+  const vspTop = (title, backTarget = "", actions = "") => `
+    <div class="vsp-topbar">
+      <div>${backTarget ? `<button class="vsp-icon-btn" data-go="${backTarget}">←</button>` : ""}</div>
+      <div class="title">${title}</div>
+      <div class="actions">${actions}</div>
+    </div>`;
+
+  const vspStatus = (text, cls = "navy") => `<span class="vsp-status ${cls}">${text}</span>`;
+  const vspBottom = (text, target) => `<div class="vsp-bottom-bar"><button class="vsp-primary" data-go="${target}">${text}</button></div>`;
+
+  const inspDashboard = () => `
+    <div class="screen active vsp-screen" id="insp-dashboard">
+      ${statusbar()}
+      ${vspTop("Inspections", "", '<button class="vsp-icon-btn">ⓘ</button><button class="vsp-icon-btn">↗</button>')}
+      <div class="vsp-content">
+        <div class="vsp-search"><span>🔍</span><span>Search by VIN / RC number</span></div>
+        <div class="vsp-date-header">Today</div>
+        ${[["RESALE • OLD", "IN PROGRESS", "teal", "VIN: MA3EYD81S00123456", "RC: KA01AB1234", "insp-checklist"],
+           ["PRE DELIVERY • NEW", "FINAL VERIFY", "amber", "VIN: MALA851CLPM889921", "", "insp-review"],
+           ["PDI • OLD", "COMPLETED", "green", "VIN: MRA8A3FEXR1238881", "RC: KA03XY9911", "insp-report"]].map(i => `
+          <div class="vsp-card" data-go="${i[5]}" style="cursor:pointer">
+            <div class="row" style="border:none;padding:0">
+              <div class="vsp-car-icon">🚗</div>
+              <div class="grow vsp-card-pad" style="padding-left:14px">
+                <h3>${i[0]}</h3>
+                ${vspStatus(i[1], i[2])}
+                <p class="mt8">${i[3]}</p>
+                ${i[4] ? `<p>${i[4]}</p>` : ""}
+              </div>
+              <button class="vsp-icon-btn" data-go="insp-checklist">☰</button>
+              <button class="vsp-icon-btn" style="color:var(--rose-500)">🗑</button>
+            </div>
+          </div>`).join("")}
+      </div>
+      <button class="vsp-fab" data-go="insp-start">＋ New inspection</button>
+    </div>`;
+
+  const inspStart = () => `
+    <div class="screen vsp-screen" id="insp-start">
+      ${statusbar()}
+      ${vspTop("Start inspection", "insp-dashboard")}
+      <div class="vsp-content">
+        <div class="vsp-card vsp-card-pad">
+          <h3>Inspection context</h3>
+          <div class="field mt12"><select><option>RESALE</option><option>PRE DELIVERY</option><option>RENTAL</option><option>AUCTION</option><option>INSURANCE CLAIM</option><option>SERVICE</option><option>HANDOVER</option></select></div>
+          <h3 class="mt16">Vehicle category</h3>
+          <div class="seg mt12"><button>New</button><button class="on">Old (used)</button></div>
+        </div>
+        <div class="vsp-card vsp-card-pad">
+          <h3>Vehicle identifiers</h3>
+          <div class="field mt12"><label>VIN</label><input class="input" value="MA3EYD81S00123456" /></div>
+          <div class="field"><label>RC number</label><input class="input" value="KA01AB1234" /></div>
+        </div>
+      </div>
+      ${vspBottom("Continue", "insp-identify")}
+    </div>`;
+
+  const inspIdentify = () => `
+    <div class="screen vsp-screen" id="insp-identify">
+      ${statusbar()}
+      ${vspTop("Identify vehicle", "insp-start")}
+      <div class="vsp-content">
+        <button class="vsp-secondary">📷 Scan VIN with camera</button>
+        <div class="vsp-card vsp-card-pad">
+          <h3>Vehicle details</h3>
+          <div class="field"><label>Make / Model</label><input class="input" value="Toyota Fortuner" /></div>
+          <div class="field"><label>Variant</label><input class="input" value="2.8 4x4 AT Legender" /></div>
+          <div class="field"><label>Engine / Chassis</label><input class="input" value="1GD-FTV · MHFAB8GS0N9003217" /></div>
+          <div class="field"><label>Odometer</label><input class="input" value="38,412 km" /></div>
+          <div class="field"><label>Ownership</label><input class="input" value="1st owner · 2 keys" /></div>
+        </div>
+      </div>
+      ${vspBottom("Continue", "insp-checklist")}
+    </div>`;
+
+  const inspChecklist = () => {
+    const sections = [
+      ["Documents Verification", "5/5", 100, true],
+      ["Exterior Inspection", "18/28", 64, false],
+      ["Wheels & Tyres", "8/10", 80, false],
+      ["Underbody", "4/8", 50, false],
+      ["Engine Bay", "12/16", 75, false],
+      ["Interior Inspection", "9/18", 50, false],
+      ["Electrical Inspection", "7/14", 50, false],
+      ["Air Conditioning", "3/6", 50, false],
+      ["Safety Features", "4/8", 50, false],
+      ["Mechanical Inspection", "10/15", 67, false],
+      ["Road Test", "0/8", 0, false],
+      ["Final Assessment", "0/8", 0, false]
+    ];
+    return `
+    <div class="screen vsp-screen" id="insp-checklist">
+      ${statusbar()}
+      ${vspTop("Inspection Checklist", "insp-identify")}
+      <div class="vsp-content" style="padding:12px;gap:10px">
+        ${sections.map((s, idx) => `
+          <div class="vsp-card vsp-section-card" data-go="${idx === 1 ? "insp-section" : "insp-section"}">
+            <div class="row between" style="border:none;padding:0">
+              <h3>${s[0]}</h3>
+              ${s[3] ? '<span style="color:var(--emerald-500);font-size:22px">✓</span>' : `<span class="tiny muted" style="font-weight:800">${s[1]}</span>`}
+            </div>
+            <div class="vsp-progress mt12"><i style="width:${s[2]}%"></i></div>
+          </div>`).join("")}
+      </div>
+      ${vspBottom("Continue to review", "insp-review")}
+    </div>`;
+  };
+
+  const inspSection = () => `
+    <div class="screen vsp-screen" id="insp-section">
+      ${statusbar()}
+      ${vspTop("Exterior Inspection", "insp-checklist")}
+      <div class="vsp-content">
+        <div class="vsp-group-title">Front</div>
+        ${[["Front Bumper", "Minor scratches", "Photos 2/4"], ["Bonnet", "Good", "Photos 1/4"], ["Headlamps", "Good", "Photos 2/4"], ["Windshield", "Damage", "Photos 1/3"]].map((item, idx) => `
+          <div class="vsp-card vsp-card-pad">
+            <h3>${item[0]}</h3>
+            <div class="vsp-option-row mt10">
+              ${["Good", "Minor scratches", "Major scratches", "Damage", "N/A"].map(x => `<span class="vsp-option ${x === item[1] ? "on" : ""}">${x}</span>`).join("")}
+            </div>
+            <div class="tiny muted mt12">${item[2]}</div>
+            <div class="vsp-media-grid mt8">
+              <button class="vsp-media" data-go="insp-capture">📷</button>
+              <button class="vsp-media" data-go="insp-capture">🖼️</button>
+              <button class="vsp-media add" data-go="insp-capture">＋</button>
+            </div>
+            ${idx === 0 ? '<p class="mt10">Videos 0/1</p><div class="vsp-media-grid mt8"><button class="vsp-media add">▶</button></div>' : ""}
+          </div>`).join("")}
+      </div>
+    </div>`;
+
+  const inspCapture = () => `
+    <div class="screen vsp-screen" id="insp-capture">
+      ${statusbar()}
+      ${vspTop("Add photos", "insp-section")}
+      <div class="vsp-content">
+        <div class="vsp-camera">
+          <span class="vsp-pin ai" style="left:52px;top:72px">AI scratch</span>
+          <span class="vsp-pin manual" style="right:48px;bottom:58px">Manual dent</span>
+          <div class="lens">📷</div>
+        </div>
+        <div class="vsp-card vsp-card-pad">
+          <div class="row between" style="border:none;padding:0"><h3>Capture session</h3>${vspStatus("2 / 4 photos", "teal")}</div>
+          <p class="mt8">Total 2 · Remaining 2 · This session 1. Green marks are AI findings; blue pins are manual annotations.</p>
+        </div>
+        <button class="vsp-primary">Take photo</button>
+        <button class="vsp-secondary" data-go="insp-section">Keep & return to item</button>
+      </div>
+    </div>`;
+
+  const inspReview = () => `
+    <div class="screen vsp-screen" id="insp-review">
+      ${statusbar()}
+      ${vspTop("Review", "insp-checklist")}
+      <div class="vsp-content">
+        <h3>42 photo(s) captured</h3>
+        <div class="vsp-media-grid">
+          ${Array.from({ length: 12 }).map((_, i) => `<button class="vsp-media" data-go="insp-capture">${i % 3 === 0 ? "🚗" : i % 3 === 1 ? "🔧" : "🛞"}</button>`).join("")}
+        </div>
+        <button class="vsp-secondary" data-go="insp-checklist">Open inspection checklist</button>
+        <button class="vsp-primary" data-go="insp-verify">Run final verification</button>
+      </div>
+    </div>`;
+
+  const inspVerify = () => `
+    <div class="screen vsp-screen" id="insp-verify">
+      ${statusbar()}
+      ${vspTop("Final verification", "insp-review")}
+      <div class="vsp-content">
+        <h2 style="font-size:22px">AI integrity & scoring</h2>
+        <div class="vsp-card vsp-card-pad">
+          <h3>Overall: Excellent</h3>
+          <div class="vsp-detail-row"><span>Exterior</span><b>88</b></div>
+          <div class="vsp-detail-row"><span>Interior</span><b>94</b></div>
+          <div class="vsp-detail-row"><span>Safety</span><b>96</b></div>
+          <div class="vsp-detail-row"><span>Cosmetic</span><b>86</b></div>
+          <div class="vsp-detail-row"><span>Confidence</span><b>96</b></div>
+          <p class="mt8">No tamper signals found. Cosmetic repair recommended.</p>
+        </div>
+        <button class="vsp-secondary">Run AI final verification</button>
+        <button class="vsp-primary" data-go="insp-report">Finalize & generate report</button>
+      </div>
+    </div>`;
+
+  const inspReport = () => `
+    <div class="screen vsp-screen" id="insp-report">
+      ${statusbar()}
+      ${vspTop("Report", "insp-verify")}
+      <div class="vsp-content">
+        <div class="vsp-card vsp-card-pad">
+          <h3 style="color:var(--teal-600)">Inspected Vehicle Details</h3>
+          <h2 style="font-size:20px;margin-top:8px">Toyota Fortuner</h2>
+          <p>2.8 4x4 AT Legender · KA01AB1234 · VIN MA3EYD81S00123456</p>
+          <div class="vsp-detail-row"><span>Odometer</span><b>38,412 km</b></div>
+          <div class="vsp-detail-row"><span>Vehicle category</span><b>OLD</b></div>
+        </div>
+        <div class="vsp-card vsp-card-pad">
+          <h3 style="color:var(--teal-600)">At a glance</h3>
+          <div class="row between mt10" style="border:none;padding:0">
+            <div><h3>Toyota Fortuner</h3><p>No structural damage detected</p></div>
+            <div style="text-align:center"><div class="vsp-score-number">A</div><span class="tiny muted">Excellent</span></div>
+          </div>
+          ${[["Engine & Transmission", "Pass", "green"], ["Tyres & Brakes", "Pass", "green"], ["Exterior Paint", "Minor", "amber"], ["Documents", "Verified", "green"]].map(r => `<div class="vsp-detail-row"><span>${r[0]}</span>${vspStatus(r[1], r[2])}</div>`).join("")}
+        </div>
+        <div class="vsp-card vsp-card-pad">
+          <h3 style="color:var(--teal-600)">Valuation & market position</h3>
+          <div class="row gap12 mt10" style="border:none;padding:0"><div class="vsp-score-number">92</div><div><b>/ 100</b><br>${vspStatus("Excellent condition", "green")}</div></div>
+          <div class="vsp-progress mt12"><i style="width:92%"></i></div>
+          <p>Above typical condition for age and mileage. Recommend cosmetic repair only.</p>
+        </div>
+        <button class="vsp-primary">Generate Comprehensive Report in PDF</button>
+        <button class="vsp-primary">Generate Comprehensive Report in JSON</button>
+      </div>
+      ${vspBottom("Done", "insp-dashboard")}
+    </div>`;
+
+  const buildInsp = () => `
+    <div class="frame-wrap">
+      <div class="frame-label"><span class="dot"></span> Inspection App · Kotlin Android (external system of record)</div>
+      <div class="phone"><div class="notch"></div><div class="phone-screen" id="frame-insp">
+        ${inspDashboard()}${inspStart()}${inspIdentify()}${inspChecklist()}${inspSection()}${inspCapture()}${inspReview()}${inspVerify()}${inspReport()}
+      </div></div>
+    </div>`;
+
   // ============================ MOUNT + ROUTER ============================
   document.getElementById("view-app").innerHTML = buildApp();
   document.getElementById("view-web").innerHTML = buildWeb();
   document.getElementById("view-admin").innerHTML = buildAdmin();
   document.getElementById("view-emp").innerHTML = buildEmp();
+  document.getElementById("view-insp").innerHTML = buildInsp();
 
   const hints = {
     app: "Flagship flow · <b>Concurrent-slot test-drive booking</b>",
     web: "SEO storefront · <b>Browse → car detail → inspection report</b>",
     admin: "Dealer self-service · <b>Test-drive capacity config</b>",
-    emp: "Field ops · <b>Conduct doorstep test drive</b>"
+    emp: "Field ops · <b>Conduct doorstep test drive</b>",
+    insp: "Existing Kotlin app · <b>Checklist → verification → PDF</b>"
   };
 
   // surface switching

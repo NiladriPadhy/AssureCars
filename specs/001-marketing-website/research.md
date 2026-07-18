@@ -4,7 +4,7 @@
 
 ## R1: UI Framework Selection
 
-**Decision**: Angular 19 standalone components + Tailwind CSS 3 + SCSS design tokens
+**Decision**: Angular 22 standalone components + Tailwind CSS 3 + SCSS design tokens
 
 **Rationale**:
 - User mandated Angular
@@ -32,9 +32,9 @@
 |--------|---------|-------------------|
 | User App | `app` | Home (`#app-home`), Search, Car Detail, Test-Drive Booking |
 | Website | `web` | Home (`#web-home`), Listing, Car Detail |
-| Admin Panel | `admin` | Dashboard (`#admin-dash`), Inventory, Test-Drive Config |
-| Employee App | `emp` | Schedule (`#emp-sched`), Conduct Drive, Leads |
-| Inspection App | mock HTML | Checklist Hub, Section Capture, Report Summary |
+| Admin Panel | `admin` | Dashboard (`#admin-dash`), Inventory, Test-Drive Config, Reserved Vehicles, Reserve Form |
+| Employee App | `emp` | Schedule (`#emp-sched`), Conduct Drive, Leads, Reservation Follow-Up |
+| Inspection App | `insp` | Checklist Hub, Section Capture, Report Summary |
 
 **Alternatives considered**:
 - Manual screenshots — rejected: not reproducible in CI
@@ -42,15 +42,16 @@
 
 ## R3: Inspection App Visual Representation
 
-**Decision**: Create `scripts/inspection-mock.html` using prototype design tokens with representative inspection screens
+**Decision**: Add an `Inspection App` surface to `prototype/`, modeled from the existing Kotlin app's checklist-first inspection flow
 
 **Rationale**:
-- No HTML prototype exists for Inspection App in `prototype/`
-- Kotlin app uses similar teal accent; mock pages styled with AssureCars navy/teal tokens maintain visual cohesion
-- Shows checklist progress, photo capture, and grade report — the three most recognizable inspection flows
+- Marketing and live prototype should show the same five client surfaces
+- Kotlin app source already defines the real flow: dashboard, vehicle identify, checklist hub/sections, capture, review, final verification, report export
+- Puppeteer can capture Inspection App screenshots from the same live prototype workflow as every other module
 
 **Alternatives considered**:
 - Android emulator screenshots — rejected: requires Android SDK, heavy setup
+- Separate HTML mock — rejected: drifted from the live prototype and hid the Inspection App from the prototype tabs
 - Skip Inspection App — rejected: user explicitly requires all five modules
 
 ## R4: Page Architecture

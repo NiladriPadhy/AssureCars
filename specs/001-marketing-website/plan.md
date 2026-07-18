@@ -6,11 +6,11 @@
 
 ## Summary
 
-Build a single-page Angular marketing website in `MarketingWebsite/` that showcases all five AssureCars client modules with prototype-derived screenshots. The site uses the navy/teal AssureCars design system from `prototype/styles.css`, Tailwind CSS for layout utilities, and SCSS for design tokens. A Puppeteer script captures screenshots from the interactive HTML prototype; Inspection App screens use a themed HTML mock.
+Build a single-page Angular marketing website in `MarketingWebsite/` that showcases all five AssureCars client modules with prototype-derived screenshots. The site uses the navy/teal AssureCars design system from `prototype/styles.css`, Tailwind CSS for layout utilities, and SCSS for design tokens. A Puppeteer script captures screenshots from the interactive HTML prototype, including the Inspection App surface modeled from the existing Kotlin app.
 
 ## Technical Context
 
-**Language/Version**: Angular 19 / TypeScript 5.7
+**Language/Version**: Angular 22 / TypeScript 6.0
 
 **Primary Dependencies**: `@angular/core`, `@angular/common`, Tailwind CSS 3.x, Puppeteer (dev, screenshot script)
 
@@ -62,8 +62,7 @@ specs/001-marketing-website/
 MarketingWebsite/
 ├── prompt/                          # Speckit workflow prompts
 ├── scripts/
-│   ├── capture-screenshots.mjs      # Puppeteer prototype capture
-│   └── inspection-mock.html         # Themed Inspection App mock for capture
+│   └── capture-screenshots.mjs      # Puppeteer prototype capture
 ├── public/
 │   └── assets/screenshots/          # Generated PNG screenshots
 ├── src/

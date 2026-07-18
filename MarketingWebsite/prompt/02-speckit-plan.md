@@ -11,7 +11,7 @@
 Create an implementation plan for the AssureCars Product Marketing Website based on `specs/001-marketing-website/spec.md`.
 
 ### Technical Decisions (pre-resolved)
-- **Stack**: Angular 19+ standalone components, TypeScript, SCSS with CSS custom properties mirroring `prototype/styles.css` tokens
+- **Stack**: Angular 22 standalone components, TypeScript, SCSS with CSS custom properties mirroring `prototype/styles.css` tokens
 - **UI Framework**: Tailwind CSS v4 (or v3) for layout/utilities + custom SCSS design tokens (navy/teal AssureCars theme)
 - **Location**: `MarketingWebsite/` at repository root
 - **Build**: Angular CLI (`ng build`) producing static output in `MarketingWebsite/dist/`

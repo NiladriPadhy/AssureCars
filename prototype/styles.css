@@ -615,3 +615,53 @@ table.tbl .car-mini b { color: var(--ink-900); font-weight: 700; }
 
 /* nudge tooltip for prototype hotspots */
 .tap-nudge { position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%); background: var(--navy-900); color: #fff; font-size: 11.5px; font-weight: 600; padding: 7px 13px; border-radius: 20px; display: flex; align-items: center; gap: 7px; box-shadow: var(--shadow-md); opacity: .92; z-index: 30; }
+
+/* inspection app prototype — mirrors Kotlin Material 3 VspScaffold/VspCard */
+.vsp-screen { background: var(--ink-050); color: var(--ink-900); }
+.vsp-topbar { height: 64px; flex: none; display: flex; align-items: center; justify-content: center; background: #fff; border-bottom: 1px solid var(--ink-100); padding: 0 56px; position: sticky; top: 0; z-index: 12; }
+.vsp-topbar > div:first-child { position: absolute; left: 8px; top: 12px; width: 48px; display: flex; justify-content: center; }
+.vsp-topbar .title { text-align: center; font-size: 20px; line-height: 26px; font-weight: 700; letter-spacing: -.1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vsp-topbar .actions { position: absolute; right: 8px; top: 12px; display: flex; justify-content: flex-end; gap: 2px; }
+.vsp-icon-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-700); font-size: 18px; }
+.vsp-icon-btn:hover { background: var(--ink-100); }
+.vsp-content { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.vsp-content::-webkit-scrollbar { width: 5px; }
+.vsp-content::-webkit-scrollbar-thumb { background: var(--ink-200); border-radius: 20px; }
+.vsp-card { width: 100%; background: #fff; border-radius: 18px; box-shadow: 0 2px 8px rgba(15, 23, 42, .08), 0 1px 2px rgba(15, 23, 42, .06); overflow: visible; }
+.vsp-card-pad { padding: 16px; }
+.vsp-card h3 { font-size: 16px; line-height: 22px; font-weight: 700; min-width: 0; }
+.vsp-card p { font-size: 12.5px; line-height: 18px; color: var(--ink-500); overflow-wrap: anywhere; }
+.vsp-status { display: inline-flex; align-items: center; border-radius: 999px; padding: 5px 12px; font-size: 12px; line-height: 16px; font-weight: 800; }
+.vsp-status.teal { background: var(--teal-050); color: var(--teal-600); }
+.vsp-status.green { background: var(--emerald-050); color: var(--emerald-500); }
+.vsp-status.amber { background: var(--amber-050); color: #b9770e; }
+.vsp-status.rose { background: var(--rose-050); color: var(--rose-500); }
+.vsp-status.navy { background: var(--ink-100); color: var(--ink-700); }
+.vsp-primary { min-height: 52px; border-radius: 16px; background: var(--teal-500); color: #fff; font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 18px; width: 100%; }
+.vsp-secondary { min-height: 52px; border-radius: 16px; background: var(--teal-050); color: var(--teal-600); font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 18px; width: 100%; }
+.vsp-bottom-bar { flex: none; position: relative; z-index: 15; padding: 16px; background: rgba(255,255,255,.96); border-top: 1px solid var(--ink-100); }
+.vsp-fab { position: absolute; right: 20px; bottom: 24px; z-index: 20; height: 56px; border-radius: 18px; background: var(--teal-500); color: #fff; box-shadow: 0 8px 20px rgba(15,181,166,.34); display: inline-flex; align-items: center; gap: 9px; padding: 0 18px; font-weight: 800; }
+.vsp-search { height: 56px; border: 1.5px solid var(--ink-300); border-radius: 6px; display: flex; align-items: center; gap: 10px; padding: 0 14px; color: var(--ink-500); background: #fff; font-size: 14px; }
+.vsp-date-header { background: #fff; color: var(--ink-500); font-size: 13px; font-weight: 800; padding: 8px 2px; }
+.vsp-car-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--teal-050); color: var(--teal-600); display: grid; place-items: center; font-size: 22px; flex: none; }
+.vsp-progress { height: 6px; min-height: 6px; width: 100%; background: var(--ink-200); border-radius: 999px; overflow: hidden; }
+.vsp-progress i { display: block; height: 100%; background: var(--teal-500); border-radius: inherit; }
+.vsp-section-card { padding: 16px; cursor: pointer; }
+.vsp-section-card .row { align-items: center; gap: 12px; }
+.vsp-section-card h3 { flex: 1; }
+.vsp-group-title { font-size: 16px; font-weight: 700; padding: 10px 4px 0; }
+.vsp-option-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.vsp-option { border-radius: 999px; padding: 8px 12px; background: var(--ink-100); color: var(--ink-700); font-size: 12px; font-weight: 700; }
+.vsp-option.on { background: var(--teal-050); color: var(--teal-600); box-shadow: inset 0 0 0 1.5px var(--teal-500); }
+.vsp-media-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.vsp-media { width: 80px; height: 80px; border-radius: 10px; background: var(--ink-100); color: var(--ink-500); display: grid; place-items: center; font-size: 24px; position: relative; overflow: hidden; }
+.vsp-media.add { background: var(--teal-050); color: var(--teal-600); border: 1.5px dashed var(--teal-500); }
+.vsp-camera { height: 360px; border-radius: 18px; background: linear-gradient(135deg, #111827, #33415c); display: grid; place-items: center; position: relative; overflow: hidden; color: #fff; }
+.vsp-camera::after { content:""; position:absolute; inset:32px; border:2px solid rgba(255,255,255,.55); border-radius:18px; }
+.vsp-camera .lens { width: 88px; height: 88px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.14); font-size: 40px; z-index: 1; }
+.vsp-pin { position:absolute; border-radius:999px; padding:5px 9px; font-size:11px; font-weight:800; color:#fff; z-index:2; }
+.vsp-pin.ai { background: var(--emerald-500); }
+.vsp-pin.manual { background: var(--navy-700); }
+.vsp-score-number { font-size: 42px; font-weight: 800; line-height: 1; color: var(--emerald-500); }
+.vsp-detail-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid var(--ink-100); font-size:13px; }
+.vsp-detail-row:last-child { border-bottom:none; }

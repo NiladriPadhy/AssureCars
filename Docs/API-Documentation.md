@@ -80,7 +80,7 @@ AssureCars has **three login types** plus a **hub-scoped role hierarchy**. Each 
 
 | Login type | Auth method | Roles | Client apps | API groups allowed |
 |------------|-------------|-------|-------------|-------------------|
-| **User Login** | OTP (phone) | `user` | `UserApp`, `Website` | Public APIs + User APIs (`/v1/me`, interest, test drives, reservations, inspection requests) |
+| **User Login** | OTP (phone) | `user` | `UserApp`, `Website` | Public APIs + User APIs (`/v1/me`, interest, test drives, inspection requests). **No reservation endpoints** |
 | **Employee Login** | Password (+ MFA if enabled) | `hub_employee` | `EmployeeApp`, `InspectionApp` | Public APIs + Employee APIs (`/v1/employee/*`, test-drive execution), **hub-scoped** |
 | **Admin Login** | Password + MFA (required) | `super_admin`, `hub_admin` | `AdminPortal` | Public + Admin APIs (`/v1/admin/*`); `hub_admin` **hub-scoped**, `super_admin` global |
 
@@ -95,7 +95,8 @@ AssureCars has **three login types** plus a **hub-scoped role hierarchy**. Each 
 | API group | Guest | User Login | Employee Login (`hub_employee`) | Admin Login (`super_admin`/`hub_admin`) |
 |-----------|-------|------------|----------------|-------------|
 | `GET /v1/cars`, car detail, CMS | ✓ | ✓ | ✓ | ✓ |
-| `POST /v1/cars/{id}/interest`, `/v1/test-drives`, `/v1/reservations` | ✗ | ✓ | ✗ | ✗ |
+| `POST /v1/cars/{id}/interest`, `/v1/test-drives` | ✗ | ✓ | ✗ | ✗ |
+| `/v1/admin/reservations` | ✗ | ✗ | ✗ | ✓ |
 | `GET/PUT /v1/me`, `/v1/me/*` | ✗ | ✓ | ✓ | ✓ |
 | `/v1/employee/*` (hub-scoped) | ✗ | ✗ | ✓ | ✗ |
 | `/v1/admin/*` (hub-scoped for hub_admin) | ✗ | ✗ | ✗ | ✓ |
@@ -490,13 +491,12 @@ X-Client-Id: UserApp
 
 The **Inspection Mobile App already exists**. Its login screen will be updated (outside AssureCars) to call:
 
-1. `POST /v1/auth/employee/login` with `X-Client-Id: InspectionApp` — for technicians
-2. `POST /v1/auth/admin/login` with `X-Client-Id: InspectionApp` — for admin users performing inspections
+1. `POST /v1/auth/employee/login` with `X-Client-Id: InspectionApp` — for hub employees / technicians
 
 The returned JWT is stored and sent on subsequent API calls. AssureCars WebAPI validates:
 - Token signature and expiry
 - `X-Client-Id: InspectionApp` ∈ `allowedClients`
-- `accountType` is `Employee` or `Admin` (never `User`)
+- `accountType` is `Employee` (never `User` or `Admin`)
 
 **Report ingestion webhook** (`POST /v1/integrations/inspection/reports`) uses **HMAC service authentication**, not user JWT — see §12.
 
@@ -1001,7 +1001,7 @@ Idempotency-Key: 8d0f7780-8536-51ef-a55c-f18gd2g01bf8
 
 > **Reservations are created and managed only by a Hub Admin** (Super Admin superset), **after an offline token payment**. There is **no user-facing reservation endpoint** — the reserve action has been removed from the User App and Website. A **reserved car is fully locked** (its `interest`, `test-drive`, and `reservation` endpoints reject with `409`/`422` until it is Sold or released). See **§11.16 Reservations (Admin)** for the full contract:
 >
-> - `POST /v1/admin/reservations` — reserve a car (buyer via linked lead or manual name+phone; optional token flag/amount)
+> - `POST /v1/admin/reservations` — reserve a car against an existing matching lead after offline token collection
 > - `GET /v1/admin/reservations?status=&overdue=` — **Reserved Vehicles** worklist with `daysPending`
 > - `GET /v1/admin/reservations/{id}` — reservation detail
 > - `PATCH /v1/admin/reservations/{id}` — mark `Sold` / `Released` / notes
@@ -2200,7 +2200,8 @@ Authorization: Bearer <access_token>
 ```json
 {
   "dealerName": "AssureCars Bengaluru",
-  "reservationHoldHours": 48,
+  "reservationHoldDays": 15,
+  "minPublishScore": 70,
   "gradeThresholds": {
     "A": 95,
     "B": 80,
@@ -2208,6 +2209,8 @@ Authorization: Bearer <access_token>
   }
 }
 ```
+
+`reservationHoldDays` and `minPublishScore` are Super Admin-only settings. `reservationHoldHours` is a legacy database field and is not part of the active API contract.
 
 ---
 
@@ -2235,7 +2238,7 @@ Authorization: Bearer <access_token>
 
 ### 11.16 Reservations (Admin — Hub Admin only)
 
-> **Hub Admin-only** (Super Admin superset). A reservation is placed **after an offline token payment**; the buyer is identified by a **linked lead OR a manual name+phone**. A **reserved car is fully locked** — its `interest`, `test-drive`, and `reservation` endpoints reject until Sold/released. Hold defaults to **15 days** (`dealer_settings.reservation_hold_days`); if not marked `Sold` in time it is **auto-released**. All money is **offline** — `tokenAmountPaise` is display-only reference (no ledger).
+> **Hub Admin-only** (Super Admin superset). A reservation is placed **against an existing open lead** after an offline token payment. The lead must belong to the same car and hub. A **reserved car is fully locked** — its `interest`, `test-drive`, and reservation endpoints reject until Sold/released, and already confirmed future test drives must not proceed unless the reservation is released. Hold defaults to **15 days** (`dealer_settings.reservation_hold_days`) and is configured by **Super Admin only**; if not marked `Sold` in time it is **auto-released**. All money is **offline** — `tokenAmountPaise` and any remaining balance are display-only references (no ledger).
 
 **Create Reservation**
 
@@ -2245,7 +2248,7 @@ Authorization: Bearer <access_token>
 Idempotency-Key: 9e1g8891-9647-62fg-b66d-g29he3h12cg9
 ```
 
-**Request — buyer via existing lead**
+**Request**
 
 ```json
 {
@@ -2254,18 +2257,6 @@ Idempotency-Key: 9e1g8891-9647-62fg-b66d-g29he3h12cg9
   "tokenReceived": true,
   "tokenAmountPaise": 2500000,
   "notes": "Token collected at Whitefield Hub"
-}
-```
-
-**Request — walk-in buyer (manual)**
-
-```json
-{
-  "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
-  "buyerName": "Rahul Sharma",
-  "buyerPhone": "+919876543210",
-  "tokenReceived": true,
-  "tokenAmountPaise": 2500000
 }
 ```
 
@@ -2278,6 +2269,7 @@ Idempotency-Key: 9e1g8891-9647-62fg-b66d-g29he3h12cg9
     "reservationNumber": "RSV-2026-000892",
     "status": "Reserved",
     "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "leadId": "l1a2b3c4-d5e6-7890-abcd-ef1234567890",
     "holdExpiresAt": "2026-07-26T10:00:00Z",
     "holdDays": 15,
     "tokenReceived": true,
@@ -2287,7 +2279,7 @@ Idempotency-Key: 9e1g8891-9647-62fg-b66d-g29he3h12cg9
 }
 ```
 
-**Errors:** `409 Conflict` (car already reserved/sold), `422` (buyer not identified — needs `leadId` or `buyerName`+`buyerPhone`; or `tokenReceived=false`).
+**Errors:** `409 Conflict` (car already reserved/sold), `422` (`leadId` missing, lead not open, lead does not match the same car/hub, or `tokenReceived=false` / token amount missing).
 
 **Reserved Vehicles worklist**
 
@@ -2307,10 +2299,11 @@ Authorization: Bearer <access_token>
       "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
       "reservationNumber": "RSV-2026-000892",
       "status": "Reserved",
-      "buyer": { "name": "Rahul Sharma", "phone": "+919876543210" },
+      "lead": { "id": "l1a2b3c4-d5e6-7890-abcd-ef1234567890", "buyerName": "Rahul Sharma", "phone": "+919876543210" },
       "car": { "title": "Toyota Fortuner", "vin": "MA3EYD81S00123456" },
       "holdExpiresAt": "2026-07-26T10:00:00Z",
       "daysPending": 3,
+      "remainingAmountPaise": 362500000,
       "notifiedEmployee": null,
       "rowVersion": 1
     }
@@ -2336,6 +2329,8 @@ If-Match: "1"
   "notes": "Deal closed offline at Whitefield Hub"
 }
 ```
+
+Before confirming `Sold`, clients SHOULD display the remaining offline amount due: `car.listPricePaise - tokenAmountPaise`. This is a staff reminder only; no payment collection or ledger entry is created.
 
 **Response `200 OK`**
 

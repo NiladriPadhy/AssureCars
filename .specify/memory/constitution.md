@@ -1,5 +1,19 @@
 <!--
 Sync Impact Report
+Version change: 3.0.0 → 3.1.0 (2026-07-18)
+MINOR — stakeholder clarified reservation invariants:
+  - Reservations MUST always be created against an existing matching lead.
+  - `reservation_hold_days` is controlled by Super Admin settings only.
+  - Mark Sold shows remaining offline amount due; no payment integration.
+  - Reserved cars block future test drives unless released.
+Propagated to:
+  - ✅ Docs/Solution-Design-Document.md
+  - ✅ Docs/API-Documentation.md
+  - ✅ Docs/Phase-Wise-Development-Plan.md
+  - ✅ database/migrations/005_reservation_redesign_and_settings.sql
+  - ✅ prototype/app.js
+  - ✅ MarketingWebsite/ screenshot workflow
+
 Version change: 2.0.0 → 3.0.0 (2026-07-18)
 MAJOR — incompatible redefinitions confirmed with stakeholder:
   - Buyer HUB VISIBILITY REVERSED: buyers MAY now see hub identity
@@ -121,9 +135,10 @@ captures intent; dealers close deals offline.
 - An agreed **commission rate (%)** MAY be recorded on a Consignor at onboarding
   as non-financial reference data. Recording the rate is permitted; **calculating
   payouts, tracking balances, or settling commissions MUST remain offline**.
-- Reservations are **staff-created (Hub Admin) non-financial holds** placed
-  after an **offline token payment**; users cannot self-reserve. Any token
-  amount is recorded as **reference/display only** (no ledger/settlement).
+- Reservations are **staff-created (Hub Admin; super_admin superset) non-financial
+  holds** placed against an **existing lead** after an **offline token payment**;
+  users cannot self-reserve. Any token amount and remaining amount are recorded
+  as **reference/display only** (no ledger/settlement).
 - Financial workflows MAY be designed for future extensibility but MUST NOT
   appear in current scope specs, tasks, or migrations without a constitution
   amendment.
@@ -137,11 +152,13 @@ Every vehicle is a unique sellable unit (one VIN = quantity 1). Concurrency
 rules differ by operation type and MUST be enforced in domain logic and tests.
 
 - **Reserve / mark sold:** a **Hub Admin** (super_admin superset) reserves a
-  car after an offline token payment; exactly one winner per car via optimistic
-  lock on `row_version` + state machine (`Draft → … → Reserved → Sold`). A
-  **reserved car is fully locked** — no interest, test drive, or second
-  reservation until it is Sold or released. If not marked Sold within the
-  configurable hold (**default 15 days**) the system auto-releases it to Live.
+  car for an existing matching lead after an offline token payment; exactly one
+  winner per car via optimistic lock on `row_version` + state machine
+  (`Draft → … → Reserved → Sold`). A **reserved car is fully locked** — no
+  interest, test drive, or second reservation, and no future confirmed test
+  drive may proceed unless the reservation is released. If not marked Sold
+  within the Super Admin-configured hold (**default 15 days**) the system
+  auto-releases it to Live.
 - **Test drive booking:** many bookings allowed, capped by slot capacity via
   Redis counter + DB conditional update. Doorstep and nearest-hub service is
   bounded to a **40 km** radius.
@@ -276,10 +293,12 @@ authorization concern, not a buyer-privacy one.
   assignment.
 - **Buyer hub visibility:** buyers MAY see hub name/address/city and distance on
   listings and detail. (Hub *scoping* still restricts which staff act on a hub.)
-- **Reservation:** a **Hub Admin** (super_admin superset) reserves a car after an
-  offline token payment; **users cannot self-reserve** (no reserve action in User
-  App/Website). Reserved cars are **fully locked** (no interest/test-drive/second
-  reservation). Configurable hold, **default 15 days**, then auto-release.
+- **Reservation:** a **Hub Admin** (super_admin superset) reserves a car for an
+  existing matching lead after an offline token payment; **users cannot
+  self-reserve** (no reserve action in User App/Website). Reserved cars are
+  **fully locked** (no interest/test-drive/second reservation; future confirmed
+  test drives do not proceed unless released). Super Admin-configured hold,
+  **default 15 days**, then auto-release.
 - **Notifications:** Push, Email, SMS, and **WhatsApp** are in-scope channels.
 - **Doorstep test drive:** offered from a hub within a **40 km** service radius.
 - **Phase scope:** MVP-a (Get Online) → MVP-b (Capture Demand) → Phase 2
@@ -320,7 +339,7 @@ after design.
 | Unit | State machines, capacity math, scoring | For domain logic |
 | Integration | API + DB + Redis concurrency races | **YES** for inventory/slots |
 | Contract | OpenAPI between clients and WebAPI | **YES** per client surface |
-| E2E | search → interest → test-drive → reserve | Critical journeys |
+| E2E | search → interest → test-drive → offline token → Hub Admin reserve | Critical journeys |
 | Install/Upgrade | Fresh Compose + migration on seeded data | Self-host correctness |
 
 Critical-path tests (concurrency, auth client matrix, state machines) MUST be
@@ -331,7 +350,8 @@ mandatory for all code paths.
 
 - Architecture: `Docs/Solution-Design-Document.md`
 - API contracts: `Docs/API-Documentation.md`
-- Database baseline: `database/migrations/001_initial_schema.sql`
+- Database migrations: `database/migrations/001_initial_schema.sql` through
+  `database/migrations/005_reservation_redesign_and_settings.sql`
 - UX reference: `prototype/`
 - Inspection integration: `Vehicle-Inspection-Kotlin-Product/README.md`
 
@@ -362,4 +382,4 @@ simpler alternatives.
 living references; where they conflict with this constitution, the constitution
 prevails until docs are amended.
 
-**Version**: 3.0.0 | **Ratified**: 2026-07-12 | **Last Amended**: 2026-07-18
+**Version**: 3.1.0 | **Ratified**: 2026-07-12 | **Last Amended**: 2026-07-18

@@ -3,7 +3,8 @@
  * Captures screenshots from prototype/ and inspection mock for the marketing site.
  */
 import { createServer } from 'node:http';
-import { readFile, mkdir, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { readFile, mkdir } from 'node:fs/promises';
 import { join, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
@@ -13,6 +14,11 @@ const ROOT = join(__dirname, '..');
 const REPO = join(ROOT, '..');
 const PROTOTYPE_DIR = join(REPO, 'prototype');
 const OUT_DIR = join(ROOT, 'public', 'assets', 'screenshots');
+const CHROME_FALLBACKS = [
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+  '/Applications/Chromium.app/Contents/MacOS/Chromium',
+];
 
 const MIME = {
   '.html': 'text/html',
@@ -92,9 +98,15 @@ async function capturePrototype(browser) {
     { surface: 'admin', screen: 'admin-dash', frame: '.desktop', file: 'admin-dashboard.png' },
     { surface: 'admin', screen: 'admin-inventory', frame: '.desktop', file: 'admin-inventory.png' },
     { surface: 'admin', screen: 'admin-td', frame: '.desktop', file: 'admin-testdrive-config.png' },
+    { surface: 'admin', screen: 'admin-res', frame: '.desktop', file: 'admin-reservations.png' },
+    { surface: 'admin', screen: 'admin-reserveform', frame: '.desktop', file: 'admin-reserve-form.png' },
     { surface: 'emp', screen: 'emp-sched', frame: '.phone', file: 'employee-schedule.png' },
     { surface: 'emp', screen: 'emp-conduct', frame: '.phone', file: 'employee-conduct-drive.png' },
     { surface: 'emp', screen: 'emp-leads', frame: '.phone', file: 'employee-leads.png' },
+    { surface: 'emp', screen: 'emp-reservations', frame: '.phone', file: 'employee-reservation-followup.png' },
+    { surface: 'insp', screen: 'insp-checklist', frame: '.phone', file: 'inspection-checklist.png' },
+    { surface: 'insp', screen: 'insp-capture', frame: '.phone', file: 'inspection-capture.png' },
+    { surface: 'insp', screen: 'insp-report', frame: '.phone', file: 'inspection-report.png' },
   ];
 
   for (const shot of shots) {
@@ -113,49 +125,20 @@ async function capturePrototype(browser) {
   server.close();
 }
 
-async function captureInspectionMock(browser) {
-  const { server, port } = await startServer(join(__dirname));
-  const page = await browser.newPage();
-  await page.goto(`http://127.0.0.1:${port}/inspection-mock.html`, { waitUntil: 'networkidle0' });
-  await page.setViewport({ width: 500, height: 920 });
-
-  const screens = [
-    { tab: 0, file: 'inspection-checklist.png' },
-    { tab: 1, file: 'inspection-capture.png' },
-    { tab: 2, file: 'inspection-report.png' },
-  ];
-
-  for (const s of screens) {
-    await page.evaluate((idx) => {
-      document.querySelectorAll('.tabs button')[idx].click();
-    }, s.tab);
-    await delay(300);
-    const phone = await page.$('.phone');
-    if (phone) {
-      await phone.screenshot({ path: join(OUT_DIR, s.file), type: 'png' });
-      console.log(`  ✓ ${s.file}`);
-    }
-  }
-
-  await page.close();
-  server.close();
-}
-
 async function main() {
   await mkdir(OUT_DIR, { recursive: true });
   console.log('Capturing screenshots...\n');
 
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || CHROME_FALLBACKS.find((path) => existsSync(path));
   const browser = await puppeteer.launch({
     headless: true,
+    ...(executablePath ? { executablePath } : {}),
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
 
   try {
     console.log('Prototype surfaces:');
     await capturePrototype(browser);
-    console.log('\nInspection App mock:');
-    await captureInspectionMock(browser);
-    const files = await stat(OUT_DIR);
     console.log(`\nDone. Screenshots saved to public/assets/screenshots/`);
   } finally {
     await browser.close();

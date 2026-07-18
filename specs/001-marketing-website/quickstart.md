@@ -39,12 +39,12 @@ cd MarketingWebsite
 npm run build
 ```
 
-Output: `MarketingWebsite/dist/marketing-website/browser/`
+Output: `MarketingWebsite/dist/MarketingWebsite/browser/`
 
 ## Serve Built Output Locally
 
 ```bash
-npx serve dist/marketing-website/browser
+npx serve dist/MarketingWebsite/browser
 ```
 
 ## Verify Checklist
@@ -55,6 +55,6 @@ npx serve dist/marketing-website/browser
 - [ ] Page is responsive at 375px and 1440px widths
 - [ ] `npm run build` completes without errors
 
-## Regenerate Inspection App Mock Screenshots
+## Regenerate Inspection App Screenshots
 
-Edit `MarketingWebsite/scripts/inspection-mock.html` then re-run `npm run capture-screenshots`.
+Edit the `Inspection App` surface in `prototype/app.js` then re-run `npm run capture-screenshots`.

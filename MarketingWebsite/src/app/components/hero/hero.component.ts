@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { SITE_CONFIG } from '../../data/modules.data';
+import { PRODUCT_MODULES, SITE_CONFIG } from '../../data/modules.data';
 
 @Component({
   selector: 'app-hero',
@@ -59,8 +59,18 @@ import { SITE_CONFIG } from '../../data/modules.data';
           >
             {{ config.prototypeLabel }}
           </a>
-          (User App, Website, Admin Panel, Employee App flows)
+          (User App, Website, Admin Panel, Employee App, Inspection App flows)
         </p>
+        <div class="mx-auto mt-8 flex max-w-4xl flex-wrap items-center justify-center gap-3">
+          @for (mod of modules; track mod.id) {
+            <a
+              [href]="'#' + mod.id"
+              class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-ink-200 transition hover:border-teal-500/40 hover:text-white"
+            >
+              {{ mod.name }}
+            </a>
+          }
+        </div>
         <div class="mx-auto mt-16 grid max-w-3xl grid-cols-3 gap-6 border-t border-white/10 pt-10">
           <div>
             <div class="text-2xl font-extrabold text-white md:text-3xl">5</div>
@@ -81,4 +91,5 @@ import { SITE_CONFIG } from '../../data/modules.data';
 })
 export class HeroComponent {
   readonly config = SITE_CONFIG;
+  readonly modules = PRODUCT_MODULES;
 }

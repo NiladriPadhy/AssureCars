@@ -29,7 +29,7 @@ export const PRODUCT_MODULES: ProductModule[] = [
   {
     id: 'user-app',
     name: 'User App',
-    tagline: 'Buyers browse certified inventory, book test drives, and reserve cars — all from their phone.',
+    tagline: 'Buyers browse certified inventory, send interest, and book test drives — all from their phone.',
     stack: 'Flutter · Android / iOS',
     icon: '📱',
     deviceType: 'mobile',
@@ -58,7 +58,7 @@ export const PRODUCT_MODULES: ProductModule[] = [
   {
     id: 'admin-panel',
     name: 'Admin Panel',
-    tagline: 'Dealer self-service for inventory, leads, test-drive capacity, and publish gates.',
+    tagline: 'Dealer self-service for inventory, leads, test-drive capacity, reservations, and publish gates.',
     stack: 'Angular · Dealer SPA',
     icon: '⚙️',
     deviceType: 'desktop',
@@ -67,6 +67,8 @@ export const PRODUCT_MODULES: ProductModule[] = [
       { src: '/assets/screenshots/admin-dashboard.png', alt: 'Admin panel dashboard with KPIs', caption: 'Dashboard', order: 1 },
       { src: '/assets/screenshots/admin-inventory.png', alt: 'Admin panel inventory management', caption: 'Inventory & Catalog', order: 2 },
       { src: '/assets/screenshots/admin-testdrive-config.png', alt: 'Admin panel test-drive capacity configuration', caption: 'Test-Drive Config', order: 3 },
+      { src: '/assets/screenshots/admin-reservations.png', alt: 'Admin panel reserved vehicles worklist', caption: 'Reserved Vehicles', order: 4 },
+      { src: '/assets/screenshots/admin-reserve-form.png', alt: 'Admin panel reserve car form linked to a lead', caption: 'Reserve a Lead', order: 5 },
     ],
   },
   {
@@ -81,12 +83,13 @@ export const PRODUCT_MODULES: ProductModule[] = [
       { src: '/assets/screenshots/employee-schedule.png', alt: 'Employee app daily schedule view', caption: 'Daily Schedule', order: 1 },
       { src: '/assets/screenshots/employee-conduct-drive.png', alt: 'Employee app conduct test drive screen', caption: 'Conduct Drive', order: 2 },
       { src: '/assets/screenshots/employee-leads.png', alt: 'Employee app leads pipeline', caption: 'Leads & CRM', order: 3 },
+      { src: '/assets/screenshots/employee-reservation-followup.png', alt: 'Employee app reservation follow-up screen', caption: 'Reservation Follow-Up', order: 4 },
     ],
   },
   {
     id: 'inspection-app',
     name: 'Inspection App',
-    tagline: 'Certified technicians run 200-point inspections and deliver shareable PDF reports.',
+    tagline: 'Certified technicians run checklist-first inspections, AI verification, and PDF report export.',
     stack: 'Kotlin · Android',
     icon: '🔍',
     deviceType: 'mobile',

@@ -16,7 +16,7 @@
 
 **Purpose**: Initialize Angular project and tooling in `MarketingWebsite/`
 
-- [X] T001 Create Angular 19 project in `MarketingWebsite/` with standalone components and SCSS
+- [X] T001 Create Angular 22 project in `MarketingWebsite/` with standalone components and SCSS
 - [X] T002 Add Tailwind CSS 3 configuration in `MarketingWebsite/tailwind.config.js` and `MarketingWebsite/src/styles.scss`
 - [X] T003 [P] Add Puppeteer dev dependency and `capture-screenshots` npm script in `MarketingWebsite/package.json`
 - [X] T004 [P] Create design tokens file `MarketingWebsite/src/styles/_tokens.scss` from `prototype/styles.css` variables
@@ -30,7 +30,7 @@
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
 - [X] T005 Create screenshot capture script `MarketingWebsite/scripts/capture-screenshots.mjs` for prototype surfaces
-- [X] T006 [P] Create Inspection App mock HTML `MarketingWebsite/scripts/inspection-mock.html` with prototype theme
+- [X] T006 [P] Add Inspection App screens to `prototype/` based on the existing Kotlin app flow
 - [X] T007 Run screenshot capture and populate `MarketingWebsite/public/assets/screenshots/`
 - [X] T008 Create module content data `MarketingWebsite/src/app/data/modules.data.ts` with all 5 modules and screenshot metadata
 

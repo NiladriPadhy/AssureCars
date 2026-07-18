@@ -38,8 +38,8 @@ import { PRODUCT_MODULES, SITE_CONFIG } from '../../data/modules.data';
           <div>
             <h3 class="text-xl font-bold text-white">Explore the full interactive workflow</h3>
             <p class="mt-2 max-w-xl text-sm leading-relaxed text-ink-300">
-              Switch between User App, Website, Admin Panel, and Employee App surfaces. Tap through
-              flagship flows like concurrent-slot test-drive booking.
+              Switch between User App, Website, Admin Panel, Employee App, and Inspection App surfaces.
+              Tap through flagship flows like concurrent-slot test-drive booking and checklist-first inspection.
             </p>
           </div>
           <a

@@ -27,7 +27,7 @@ Represents one AssureCars client surface showcased on the marketing site.
 
 ### Screenshot
 
-A captured or mocked product UI image.
+A captured product UI image from the interactive prototype.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
