@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Captures screenshots from prototype/ and inspection mock for the marketing site.
+ * Captures screenshots from prototype/ for the marketing site.
  */
 import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
@@ -104,9 +104,9 @@ async function capturePrototype(browser) {
     { surface: 'emp', screen: 'emp-conduct', frame: '.phone', file: 'employee-conduct-drive.png' },
     { surface: 'emp', screen: 'emp-leads', frame: '.phone', file: 'employee-leads.png' },
     { surface: 'emp', screen: 'emp-reservations', frame: '.phone', file: 'employee-reservation-followup.png' },
-    { surface: 'insp', screen: 'insp-checklist', frame: '.phone', file: 'inspection-checklist.png' },
-    { surface: 'insp', screen: 'insp-capture', frame: '.phone', file: 'inspection-capture.png' },
-    { surface: 'insp', screen: 'insp-report', frame: '.phone', file: 'inspection-report.png' },
+    { surface: 'insp', screen: 'insp-checklist', frame: '.phone', file: 'inspection-checklist-kotlin.png' },
+    { surface: 'insp', screen: 'insp-capture', frame: '.phone', file: 'inspection-capture-kotlin.png' },
+    { surface: 'insp', screen: 'insp-report', frame: '.phone', file: 'inspection-report-kotlin.png' },
   ];
 
   for (const shot of shots) {

@@ -95,9 +95,9 @@ export const PRODUCT_MODULES: ProductModule[] = [
     deviceType: 'mobile',
     order: 5,
     screenshots: [
-      { src: '/assets/screenshots/inspection-checklist.png', alt: 'Inspection app 200-point checklist hub', caption: 'Checklist Hub', order: 1 },
-      { src: '/assets/screenshots/inspection-capture.png', alt: 'Inspection app photo capture screen', caption: 'Photo Capture', order: 2 },
-      { src: '/assets/screenshots/inspection-report.png', alt: 'Inspection app grade report summary', caption: 'Grade Report', order: 3 },
+      { src: '/assets/screenshots/inspection-checklist-kotlin.png', alt: 'Inspection app 200-point checklist hub', caption: 'Checklist Hub', order: 1 },
+      { src: '/assets/screenshots/inspection-capture-kotlin.png', alt: 'Inspection app photo capture screen', caption: 'Photo Capture', order: 2 },
+      { src: '/assets/screenshots/inspection-report-kotlin.png', alt: 'Inspection app grade report summary', caption: 'Grade Report', order: 3 },
     ],
   },
 ];
