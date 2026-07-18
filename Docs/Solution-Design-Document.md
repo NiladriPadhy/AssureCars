@@ -3,7 +3,7 @@
 **Product:** AssureCars — Premium Certified Used-Car Reseller Platform
 **Business Inspiration:** [Cars24](https://www.cars24.com/), [Spinny](https://www.spinny.com/)
 **Document Type:** Solution / High-Level & Low-Level Design (HLD + LLD)
-**Version:** 2.0
+**Version:** 3.0
 **Status:** Draft for Review
 
 ---
@@ -33,6 +33,7 @@
 | 1.8 | 2026-07-17 | Architecture | **Complete inspection-data capture** — persist the full inspection graph (per-photo images + metadata, manual annotations, AI findings, full checklist responses, damage assessments, scores, integrity signals) as first-class tables alongside the PDF, not just `raw_payload`; **every inspection keyed to a VIN**; formalized **"list a car by VIN → auto-map inspection"** admin flow with bidirectional correlation (migration `002_inspection_complete_data.sql`) |
 | 1.9 | 2026-07-18 | Architecture | **Consignor onboarding + commission-rate capture** — Admin sets an agreed **commission % on the Consignor at onboarding** (both Vendor & Individual) as non-financial reference data; consigned cars inherit the rate for display; commission **payout calculation/settlement stays offline (out of scope)**; added `consignors.commission_pct` (migration `003_consignor_commission.sql`); documented E2E Consignor & consigned-vehicle onboarding workflow |
 | 2.0 | 2026-07-18 | Architecture | **Hub role hierarchy & hub scoping** — introduced `super_admin` (global) / `hub_admin` (hub-scoped) / `hub_employee` (hub-scoped) / `user`; **Admin Login is now Admin Portal only** (dashboard); the **Inspection App is opened by Hub Employee tokens only**; **Consignors scoped to one hub** and a consigned car must share its consignor's hub; **Sell/PDI routed to the customer's nearest hub** (GPS/pincode) which then owns the activity; **buyers never see internal hub identity** (city/area + distance only; exact address post-booking); Super Admin onboards hubs/hub-admins, Hub Admin onboards hub-employees/consignors; migration `004_hub_roles_and_scoping.sql` |
+| 3.0 | 2026-07-18 | Architecture | **Stakeholder-confirmed workflow finalization.** (1) **Web stack = Angular only** for Website + Admin (removed Next.js/React). (2) **Buyer hub visibility reversed** — buyers now see hub name/address/city + distance. (3) **Roles unified** everywhere: Super Admin, Hub Admin, Hub Employee, User (retired "Sales Executive"/"Hub Manager" as roles; they are `hub_employee`/`hub_admin`). (4) **WhatsApp** is an in-scope notification channel. (5) **Reservation redesigned** — **Hub Admin-only** (super_admin superset) after an **offline token payment**; **removed from User App/Website**; a **reserved car is fully locked** (no interest/test-drive/second reservation); configurable hold **default 15 days** → auto-release; new **Reserved Vehicles** admin screen (days-pending + notify Employee App). (6) **Doorstep/nearest-hub radius = 40 km.** (7) Sell **indicative quote / final offer** captured as display-only refs; Sell/PDI inspection = **technician appointment** (not the slot-capacity engine). (8) Added `min_publish_score`. Migration `005_reservation_redesign_and_settings.sql` |
 
 ---
 
@@ -124,7 +125,7 @@ AssureCars has **three login types** and a **hub-centric role hierarchy** on top
 | **Super Admin** (`super_admin`) | Admin | `AdminPortal` | **All hubs (global)** | One seeded/static login. Onboards **Hubs**, **Hub Admins**, **Hub Employees**, and **Consignors**; owns dealer-wide settings; can act on any hub and reassign Sell/PDI requests. |
 | **Hub Admin** (`hub_admin`) | Admin | `AdminPortal` | **Assigned hub(s)** | Onboards **Hub Employees** and **Consignors** for their hub(s); manages their hub's catalog, inventory, slot config, leads, reservations. |
 | **Hub Employee** (`hub_employee`) | Employee | `EmployeeApp`, `InspectionApp` | **Assigned hub(s)** | Runs sales, test-drive, and **inspection** operations for their hub(s). Only staff role that opens the Inspection App. |
-| **User** (`user`) | User | `UserApp`, `Website` | — | Buyer/seller. **Never sees internal hub identity.** |
+| **User** (`user`) | User | `UserApp`, `Website` | — | Buyer/seller. Sees hub info (name/address/city + distance); cannot self-reserve. |
 
 - **Admin Login is dashboard-only** — `super_admin` and `hub_admin` tokens grant **Admin Portal**, never Employee App or Inspection App.
 - **Inspection App is opened by Hub Employee tokens only** (`X-Client-Id: InspectionApp`).
@@ -160,7 +161,7 @@ flowchart LR
 
 | Actor | Login type / Role | Surface | Hub scope | Responsibilities |
 |-------|-------------------|---------|-----------|------------------|
-| **Guest** | *(none)* | Web, User App | — | Browse & search without login; never sees hub identity |
+| **Guest** | *(none)* | Web, User App | — | Browse & search without login; sees hub info (name/city + distance) |
 | **Registered User (buyer/seller)** | **User Login** (`user`) | Web, User App | — | Interest, test drives, reservations, Sell/PDI requests *(purchase/financing: future scope)* |
 | **Hub Employee — Sales** | **Employee Login** (`hub_employee`) | Employee App | Assigned hub(s) | Own leads, run test drives, close deals for their hub |
 | **Hub Employee — Test-Drive Agent / Driver** | **Employee Login** (`hub_employee`) | Employee App | Assigned hub(s) | Deliver doorstep test drives, capture start/end, OTP verify |
@@ -179,10 +180,10 @@ flowchart LR
 
 | App | Platform | Framework (Recommended) | Primary Users |
 |-----|----------|-------------------------|---------------|
-| End-User Mobile App | Android + iOS | **Flutter** (or React Native) | Registered users | **User Login** (OTP) |
-| Dealership Employee App | Android + iOS | **Flutter** (or React Native) | Hub Employees (Sales, Drivers, Technicians) | **Employee Login** (`hub_employee`) |
-| Customer Website | Web (responsive/SSR) | **Next.js (React)** | Registered users, guests | **User Login** (OTP) for authenticated flows |
-| Admin Panel | Web (SPA) | **React + Ant Design / MUI** | Super Admin, Hub Admins | **Admin Login** (password + MFA) |
+| End-User Mobile App | Android + iOS | **Flutter** | Registered users | **User Login** (OTP) |
+| Dealership Employee App | Android + iOS | **Flutter** | Hub Employees (Sales, Drivers, Technicians) | **Employee Login** (`hub_employee`) |
+| Customer Website | Web (responsive/SSR) | **Angular (SSR/SSG)** | Registered users, guests | **User Login** (OTP) for authenticated flows |
+| Admin Panel | Web (SPA) | **Angular SPA** | Super Admin, Hub Admins | **Admin Login** (password + MFA) |
 | WebAPI | Backend | **.NET (ASP.NET Core Web API)** or **Node/NestJS** | All clients | Validates JWT `accountType` + `allowedClients` + hub scope |
 | **Inspection Mobile App** *(existing / external)* | Android + iOS | *Pre-built — not rebuilt by AssureCars* | Hub Employees (Inspection Technicians) | **Employee Login** *(existing app login updated to federate with AssureCars IdP)* |
 
@@ -204,7 +205,7 @@ Modules are tagged by phase. **MVP is deliberately non-financial.** Everything m
 | 6 | **Test Drive Booking (concurrent-slot engine)** | **MVP** | Flagship capability |
 | 7 | Employee Operations (leads, test-drive execution) | **MVP** | Dealer staff app |
 | 8 | **Inspection App Integration** (ingest external PDF) | **MVP** | Trust content |
-| 9 | Notifications (Push/SMS/Email/WhatsApp) | **MVP** *(push/email/SMS)* | WhatsApp later |
+| 9 | Notifications (Push/SMS/Email/WhatsApp) | **MVP** | WhatsApp is an in-scope channel |
 | 10 | Admin & Configuration (RBAC, hubs, slot capacity) | **MVP** | Dealer self-service config |
 | 11 | Reporting & Analytics (basic ops dashboards) | **MVP** *(basic)* | Advanced BI later |
 | 12 | Reservation / Deal Handoff (**non-financial**) | **MVP** | Marks car reserved/sold; closed offline |
@@ -227,8 +228,8 @@ flowchart TB
     subgraph Clients
         UA[End-User Mobile App<br/>Flutter Android/iOS]
         EA[Employee Mobile App<br/>Flutter Android/iOS]
-        WEB[Website<br/>Next.js SSR]
-        ADM[Admin Panel<br/>React SPA]
+        WEB[Website<br/>Angular SSR]
+        ADM[Admin Panel<br/>Angular SPA]
     end
 
     CDN[CDN / Media Edge<br/>optional for self-host]
@@ -276,7 +277,7 @@ flowchart TB
     BUS --> NOTIF
     BUS --> SRCH
     BUS --> RPT
-    NOTIF --> EXT[SMS / Email / Push providers<br/>WhatsApp later]
+    NOTIF --> EXT[SMS / Email / Push / WhatsApp providers]
 
     INSP[Inspection Mobile App<br/>EXISTING / external] -->|PDF + metadata| INTG
     INTG --> CAT
@@ -303,14 +304,14 @@ A defining constraint of AssureCars (vs. a generic e-commerce catalog): **each v
 
 - Every car carries a **listing source**: `Owned`, `ConsignedVendor`, or `ConsignedIndividual`. Consigned cars link to a **Consignor** record (the owning vendor/individual) that carries the **agreed commission %** captured at onboarding, for operational reference/display — the platform stores the rate but performs **no payout calculation or settlement** (offline).
 - A car can transition: `Draft → In-Inspection → Certified → Live → Reserved → Sold`.
-- Only **one deal** can ultimately claim a given car. **In the MVP this is a non-financial reservation** — a staff member (or the system on buyer request) marks the car `Reserved`, then the dealer closes the deal offline and marks it `Sold`. **No payment is involved.** (Online purchase with payment is future scope.)
+- Only **one deal** can ultimately claim a given car. **In the MVP this is a non-financial reservation** — a **Hub Admin** marks the car `Reserved` (after an offline token), then the dealer closes the deal offline and marks it `Sold`. **No payment is involved.** (Online purchase with payment is future scope.)
 - **Test drives are NOT purchases** → many people can test-drive the same car over time; concurrency here is about *scheduling capacity*, not exclusive ownership (see §10.6).
 
 This distinction drives two different concurrency strategies:
 
 | Operation | Concurrency Rule | Mechanism | Phase |
 |-----------|------------------|-----------|-------|
-| **Reserve / mark sold** (non-financial) | Exactly one winner per car | Optimistic lock on `Car.row_version` + state machine | **MVP** |
+| **Reserve / mark sold** (non-financial, **Hub Admin only**) | Exactly one winner per car | Optimistic lock on `Car.row_version` + state machine; reserved car fully locked | **MVP** |
 | **Online purchase with payment** | Exactly one winner + money correctness | Optimistic lock + payment/hold TTL + idempotency | **future scope** |
 | **Test drive a car** | Many allowed, capped by slot capacity | Atomic capacity counter per (car/hub, slot) with Redis + DB constraint | **MVP** |
 
@@ -322,9 +323,9 @@ The stack is chosen so an SMB dealer can **self-host on a single modest server**
 
 | Layer | MVP Core (self-host) | Optional Upgrade | Notes |
 |-------|----------------------|------------------|-------|
-| Mobile (User + Employee) | **Flutter** | React Native | Single codebase → Android + iOS; shared design system |
-| Website | **Next.js (React) + TypeScript** | — | SSR/ISR for SEO on the dealer's listings |
-| Admin Panel | **React SPA + MUI/Ant Design** | — | Data-dense; role-based views |
+| Mobile (User + Employee) | **Flutter** | — | Single codebase → Android + iOS; shared design system |
+| Website | **Angular + TypeScript** | — | SSR/SSG for SEO on the dealer's listings |
+| Admin Panel | **Angular SPA** | — | Data-dense; role-based views |
 | Backend / WebAPI | **ASP.NET Core Web API (C#)** — modular monolith | NestJS/Spring | Background workers for jobs/reminders |
 | Reverse proxy / gateway | **NGINX / Caddy** (TLS, routing) | Kong / YARP | Caddy gives automatic HTTPS — great for self-host |
 | Primary DB | **PostgreSQL** | Managed Postgres | ACID, JSONB, `row_version`; **also powers search via FTS** in MVP |
@@ -333,7 +334,7 @@ The stack is chosen so an SMB dealer can **self-host on a single modest server**
 | Messaging | **In-process events** | RabbitMQ | No external broker needed for MVP |
 | Object Storage | **Local filesystem / MinIO** | AWS S3 / Azure Blob + CDN | Car media + inspection PDFs; S3-compatible API keeps code portable |
 | Auth | **OIDC + JWT** (Keycloak or built-in) | Auth0/Cognito | **User Login:** OTP · **Employee/Admin Login:** password (+ MFA for Admin); tokens scoped by `accountType` and `allowedClients` |
-| Notifications | **Push (FCM/APNs), Email (SMTP/SES/SendGrid), SMS (MSG91/Twilio)** | WhatsApp Business API *(later)* | Dealer supplies provider keys |
+| Notifications | **Push (FCM/APNs), Email (SMTP/SES/SendGrid), SMS (MSG91/Twilio), WhatsApp Business API** | — | Dealer supplies provider keys |
 | Maps / Geo | **Google Maps / Mapbox** | — | Hub locator, doorstep routing |
 | ~~Payments~~ | **— (not in MVP)** | Razorpay/Stripe/PayU *(future scope)* | Deferred financial module |
 | Observability | **Structured logs + Sentry** | OpenTelemetry + Prometheus/Grafana | Lightweight for self-host; richer optional |
@@ -445,7 +446,7 @@ erDiagram
 | 70–74 | C+ |
 | &lt; 70 | C or below *(configurable per dealer)* |
 
-**Publish gate:** `inspection_reports.status = Pass` AND `inspection_final_assessments.recommendation IN (NO_REPAIR, MINOR_REPAIR)` AND `cars.list_price IS NOT NULL`.
+**Publish gate:** `inspection_reports.status = Pass` AND `inspection_final_assessments.recommendation IN (NO_REPAIR, MINOR_REPAIR)` AND `inspection_valuations.overall_score >= dealer_settings.min_publish_score` (default 70) AND `cars.list_price IS NOT NULL`.
 
 ### 9.2 Inspection App JSON → Database Mapping
 
@@ -1184,6 +1185,14 @@ The v1 baseline (§9.3) normalizes only the inspection **summary**. Migration `0
 - Image **binaries** live in object storage (same private-bucket policy as the PDF); `inspection_report_images` records the `storage_key` / `url` / `sha256_hash` metadata.
 - `002` also adds `idx_inspection_report_vehicles_vin` and the `link_inspection_reports_by_vin(car_id, vin)` helper that powers the VIN auto-map flow (§10.2, §10.14).
 
+### 9.3.2 Later Migrations (003–005)
+
+| Migration | Adds |
+|-----------|------|
+| `003_consignor_commission.sql` | `consignors.commission_pct` (reference-only rate; no payout/settlement) |
+| `004_hub_roles_and_scoping.sql` | Canonical roles (`super_admin`/`hub_admin`/`hub_employee`); `consignors.hub_id` (NOT NULL) + same-hub trigger `trg_car_consignor_same_hub`; Sell/PDI `customer_latitude/longitude`, `pincode`, `assigned_hub_id` |
+| `005_reservation_redesign_and_settings.sql` | `dealer_settings.reservation_hold_days` (default 15) + `min_publish_score` (default 70); reservation buyer identity (`user_id` nullable, `buyer_name`/`buyer_phone`, `chk_reservation_buyer_identified`), offline token refs (`token_received`, `token_amount_paise`), `notified_employee_id`; Sell display-only money refs (`inspection_requests.indicative_quote_paise`, `final_offer_paise`); `hubs.daily_inspection_capacity` |
+
 ### 9.4 Key Indexes & Constraints Summary
 
 | Rule | Implementation |
@@ -1346,6 +1355,7 @@ sequenceDiagram
 - Rate limits on User OTP (3/min, 10/hour/number); lockout + captcha on staff password abuse.
 - Inspection App webhook ingestion uses **HMAC service auth**, not user/employee JWT.
 - **No KYC in MVP** for User Login.
+- **First-run bootstrap:** a fresh self-host instance seeds one **Super Admin** from provisioning `.env` (see §14.2); on first login the Super Admin is **forced to enroll TOTP (MFA)** before any Admin action is permitted.
 
 ---
 
@@ -1368,7 +1378,7 @@ sequenceDiagram
 - Source is a **required attribute** at car creation. For consigned sources, a **Consignor** (name + contact, optionally company/address, **and the agreed commission %**) is linked for the dealer's operational reference.
 - **Inspection Report PDF is mandatory for ALL three sources** — the publish gate (below) rejects any car without an ingested, passing report, with no exception for consigned cars.
 - To buyers, all three render identically as listings — source **and commission %** are **internal-only** (visible to dealer staff/admin, never to buyers).
-- **Buyers never see the internal hub identity** (hub id/name/code). Public listings show only **city/area** and **distance** (derived from the hub's geo); the exact hub address is revealed only **after** a test-drive booking or reservation is confirmed. The hub is used internally to decide **which hub's employees own the activity**.
+- **Buyers see the hub information** (name, address, city) and **distance** on listings and car detail. The hub also determines **which hub's employees own the activity** (leads, test drives, reservations).
 - The **unique-VIN, sell-once** rule and reservation concurrency apply **regardless of source**.
 - The app records the consignor's **agreed commission %** but performs **no payout calculation, balance tracking, or settlement** — that remains the dealer's offline process.
 
@@ -1457,7 +1467,7 @@ The admin never manually stitches an inspection to a car. **VIN is the single co
 
 ```mermaid
 sequenceDiagram
-    actor A as Catalog Admin
+    actor A as Hub Admin
     participant ADM as Admin Panel
     participant CAT as Catalog Svc
     participant DB as PostgreSQL
@@ -1488,7 +1498,7 @@ sequenceDiagram
 | POST | `/v1/admin/cars` | Create draft car (requires `vin`, `listingSource`, `hubId`; `consignorId` if consigned — its hub must equal `hubId`). **Auto-maps any inspection report(s) already ingested for that VIN** |
 | PATCH | `/v1/admin/cars/{id}` | Update attributes/pricing/source. Changing `vin` re-runs VIN auto-mapping |
 | POST | `/v1/admin/cars/{id}/publish` | Move to Live (validates report + price) |
-| GET | `/v1/cars/{id}` | Public detail (Live only) — **no hub identity**, only city/area + distance |
+| GET | `/v1/cars/{id}` | Public detail (Live only) — includes hub name/address/city + distance |
 | GET | `/v1/cars/{id}/inspection-report` | Certified inspection report |
 | GET/POST | `/v1/admin/consignors` | List/create consignors (vendor/individual) incl. `commissionPct` |
 | PATCH | `/v1/admin/consignors/{id}` | Update consignor details incl. `commissionPct` |
@@ -1525,9 +1535,9 @@ sequenceDiagram
     Note over S,ES: CarPublished/CarUpdated/CarSold<br/>events keep index in sync
 ```
 
-**Facets (buyer):** make, model, year, price, body type, fuel, transmission, km, owners, color, **city/area** (derived from the car's hub — **never the hub id/name**), features.
-**Internal filter (staff/admin only):** `hub` (yard), `listing_source` (Owned / Consigned-Vendor / Consigned-Individual) and consignor — **not exposed to buyers**. Staff results are hub-scoped by role.
-**Sort:** relevance, price, newest, low-km, distance (computed from the hub's geo without revealing which hub).
+**Facets (buyer):** make, model, year, price, body type, fuel, transmission, km, owners, color, **city/hub** (buyers may filter by hub/city), features.
+**Internal filter (staff/admin only):** `listing_source` (Owned / Consigned-Vendor / Consigned-Individual) and consignor — **not exposed to buyers**. Staff results are hub-scoped by role.
+**Sort:** relevance, price, newest, low-km, distance (computed from the hub's geo).
 **Recommendations:** "similar cars", "recently viewed", "price-drop", personalized via events (Phase 2 ML).
 **Consistency:** Sold/Reserved cars removed from index within seconds via events; detail API is source of truth to prevent stale purchase attempts.
 
@@ -1535,9 +1545,9 @@ sequenceDiagram
 
 ### 10.4 Module: Interest / Lead Management ("Send Interest")
 
-**Purpose:** Capture buyer intent on a car, create a **Lead**, route it to a Sales Executive, and drive it down the funnel.
+**Purpose:** Capture buyer intent on a car, create a **Lead**, route it to a Hub Employee (Sales), and drive it down the funnel.
 
-**Actors:** Buyer, Sales Executive, Hub Manager, System (scoring, SLA, assignment).
+**Actors:** Buyer, Hub Employee (Sales), Hub Admin, System (scoring, SLA, assignment).
 
 **E2E Workflow — Send Interest → Lead → Assignment → Contact**
 
@@ -1551,7 +1561,7 @@ sequenceDiagram
     participant BUS as Event Bus
     participant AS as Assignment Engine
     participant N as Notification
-    actor E as Sales Executive
+    actor E as Hub Employee (Sales)
 
     U->>C: Tap "Send Interest" / "Contact" on car
     C->>GW: POST /cars/{id}/interest {prefs, contact}
@@ -1599,9 +1609,10 @@ stateDiagram-v2
 **Rules & edge cases**
 
 - Duplicate interest on same car by same user → merge into existing open lead (no duplicate).
-- **Lead scoring** prioritizes executive worklist; finance-intent + test-drive-scheduled boost score.
+- **Lead scoring** prioritizes the sales worklist; test-drive-scheduled boosts score.
 - **SLA & auto-escalation** via scheduled job; unattended leads reassigned.
-- Interest is allowed on `Reserved` cars but flagged (waitlist) — buyer notified if the car frees up.
+- **Booking a test drive without prior interest auto-creates a Lead** (source=Interest) so sales can follow up. *(Confirmed 2026-07-18.)*
+- **Reserved cars are locked:** Send Interest is **rejected** on a `Reserved` car (the car is held for a specific buyer) — no waitlist while reserved.
 
 ---
 
@@ -1609,7 +1620,7 @@ stateDiagram-v2
 
 **Purpose:** Let buyers book a test drive at a **scheduled date & time**, either **at a hub** or **doorstep**. Because a test drive is **short** (e.g., 20–30 min) relative to a display slot, the system must allow **multiple test drives for the same time slot**, capped by a **configurable capacity** per car/hub/slot.
 
-> **Hub ownership & buyer privacy:** a test drive always belongs to the **hub that holds the car** (`cars.hub_id`), and **that hub's Hub Employees** manage it (booking, reminders, conducting the drive, OTP verify) — hub-scoped so other hubs' staff don't see it. The **buyer never sees the hub id/name**; they choose a car and a time and (for AtHub) see only **city/area + distance** until the booking is confirmed, at which point the **exact hub address** is revealed.
+> **Hub ownership:** a test drive always belongs to the **hub that holds the car** (`cars.hub_id`), and **that hub's Hub Employees** manage it (booking, reminders, conducting the drive, OTP verify) — hub-scoped so other hubs' staff don't see it. The **buyer sees the hub name/address + distance** and, for **Doorstep**, service is offered only within a **40 km** radius of the hub.
 
 #### 10.5.1 The Concurrency Problem & Solution
 
@@ -1776,7 +1787,7 @@ sequenceDiagram
     TD->>N: post-drive nudge -> "Reserve this car / talk to us?"
 ```
 
-**(b) Inventory & availability** — hub manager toggles car test-drive availability, adjusts slot capacity, marks car in maintenance (auto-suspends future slots).
+**(b) Inventory & availability** — Hub Admin/Hub Employee toggles car test-drive availability, adjusts slot capacity, marks car in maintenance (auto-suspends future slots).
 
 > **Note:** Inspection capture is **not** part of the Employee App. Technicians use the **existing Inspection Mobile App**, which produces the PDF report ingested via §10.14.
 
@@ -1793,66 +1804,97 @@ sequenceDiagram
 
 ---
 
-### 10.7 Module: Reservation / Deal Handoff — **Non-Financial (MVP)**
+### 10.7 Module: Reservation / Deal Handoff — **Staff-Only, Non-Financial**
 
-**Purpose:** Let a buyer/staff **reserve a specific car** so it's held for an offline deal, then let the dealer **close the deal offline** and mark it `Sold`. **No online payment, deposit, or financing in the MVP** — the platform captures intent and hands off to the dealer's existing sales process.
+**Purpose:** Let a **Hub Admin** (super_admin superset) **reserve a specific car** for a named buyer **after that buyer has paid a token offline**, so the car is **held and fully locked** while the deal is closed offline, then mark it `Sold`. **Users cannot self-reserve** — the reserve action has been **removed from the User App and Website**. **No online payment, deposit, or financing** — the platform records intent (and an optional token reference) and hands off to the dealer's offline sales process.
 
-**E2E Workflow — Reserve → Dealer Closes Offline → Sold (no money movement)**
+**Key rules (confirmed 2026-07-18)**
+
+- **Only a Hub Admin reserves** a car (Super Admin can act on any hub). **Hub Employees and Users cannot reserve.**
+- A reservation is placed **after an offline token payment**. The token is recorded as a **display-only reference** (`token_received` flag + optional `token_amount_paise`) — **no ledger/settlement**.
+- **Buyer identity:** the reservation is tied to **either a linked lead/user OR a manually entered buyer name + phone** (walk-in) — enforced by `chk_reservation_buyer_identified`.
+- A **reserved car is fully locked / read-only:** no **Send Interest**, no **test drive**, no **second reservation** — the car is blocked for that one person until it is Sold or released.
+- **Hold period is configurable (default 15 days**, `dealer_settings.reservation_hold_days`). If the Hub Admin does **not mark it Sold within the hold window**, a job **auto-releases** the car back to `Live`.
+- **Sold / Release are Hub Admin-only** actions.
+- A **Reserved Vehicles** screen (Hub Admin + Super Admin) lists reserved cars with **days-pending**, and offers **"Notify Employee App"** to ask the assigned Hub Employee (fallback: hub employee pool) to follow up on the **final deal**.
+
+**E2E Workflow — Hub Admin Reserves (after offline token) → Sold / Auto-Release**
 
 ```mermaid
 sequenceDiagram
-    actor U as Buyer
-    participant C as App/Web
+    actor B as Buyer
+    actor HA as Hub Admin
+    participant ADM as Admin Portal
     participant GW as Gateway
     participant R as Reservation Svc
     participant CAT as Catalog
     participant BUS as Event Bus
     participant N as Notification
-    actor E as Dealer Staff
+    actor E as Hub Employee
 
-    U->>C: "Reserve this car" / "I want to buy"
-    C->>GW: POST /reservations {carId, idempotencyKey}
-    GW->>R: create reservation
+    B->>HA: Pays token OFFLINE, asks to hold the car
+    HA->>ADM: Reserve car (link lead OR enter buyer name+phone, token flag/amount)
+    ADM->>GW: POST /admin/reservations {carId, buyer, token, idempotencyKey}
+    GW->>R: create reservation (Hub Admin, hub-scoped)
     R->>CAT: Reserve car (optimistic lock)
     CAT->>CAT: UPDATE car SET status=Reserved<br/>WHERE id=? AND status=Live AND row_version=?
     alt reservation won
-        CAT-->>R: reserved (soft hold TTL, e.g. 48h configurable)
-        R-->>C: 201 Reserved + "dealer will contact you"
-        R->>BUS: CarReserved -> hide/flag in search
-        BUS->>N: notify buyer + assigned staff
-        E->>C: (Employee App) contact buyer, negotiate OFFLINE
-        E->>GW: PATCH /reservations/{id} {status: Sold | Released}
-        alt deal closed offline
+        CAT-->>R: reserved (hold TTL = reservation_hold_days, default 15d)
+        R->>BUS: CarReserved -> remove from search; block interest/test-drive
+        BUS->>N: notify buyer (WhatsApp/SMS) + assigned employee
+        Note over ADM: Reserved Vehicles screen shows days-pending
+        HA->>ADM: (optional) Notify Employee App to follow up
+        ADM->>N: push follow-up task to assigned Hub Employee
+        E->>ADM: closes deal OFFLINE
+        HA->>GW: PATCH /admin/reservations/{id} {status: Sold | Released}
+        alt Sold within hold window
             GW->>R: mark Sold
             R->>CAT: car status=Sold (final)
-            R->>BUS: CarSold -> remove from search
-        else buyer drops / hold expires
-            GW->>R: Released (or TTL job)
+        else not Sold within hold window
+            R->>R: hold-expiry job -> Released
             R->>CAT: car status=Live (back on sale)
         end
     else reservation lost (already reserved)
         CAT-->>R: conflict
-        R-->>C: 409 Car no longer available + similar cars
+        R-->>ADM: 409 Car already reserved
     end
 ```
 
-**Single-winner concurrency (still required — the car is unique)**
+**Single-winner concurrency (the car is unique)**
 
-- Reservation uses **optimistic concurrency**: `UPDATE car SET status=Reserved WHERE status=Live AND row_version=@v`. Only one request wins; others get `409`.
-- **Soft hold TTL** (dealer-configurable, e.g. 24–72h) auto-releases stale reservations back to `Live` via a job.
+- Reservation uses **optimistic concurrency**: `UPDATE car SET status=Reserved WHERE status=Live AND row_version=@v`. Only one request wins; others get `409`. `uq_reservations_active_car` guarantees one active reservation per car.
+- **Configurable hold (default 15 days)** — a job auto-releases stale reservations back to `Live`.
+- **Reserved = locked:** the service layer rejects interest/test-drive/reservation attempts on a `Reserved` car.
 - **Idempotency key** prevents duplicate reservations on retry.
-- **No payment, no ledger, no refund** — closing and any money handling happen **outside the system** in the MVP.
+- **No payment, no ledger, no refund** — the token and any money handling happen **outside the system**; only a reference flag/amount is stored.
 
-**Key APIs (MVP)**
+**Reservation State Machine**
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/v1/reservations` | Reserve a car (optimistic-locked, idempotent) |
-| GET | `/v1/reservations/{id}` | Reservation status |
-| PATCH | `/v1/reservations/{id}` | Staff: mark `Sold` / `Released` / add notes |
-| GET | `/v1/employee/reservations` | Staff worklist of active reservations |
+```mermaid
+stateDiagram-v2
+    [*] --> Reserved: Hub Admin reserves (offline token)
+    Reserved --> DealInProgress: follow-up started (optional)
+    DealInProgress --> Sold: Hub Admin marks Sold (deal closed offline)
+    Reserved --> Sold: Hub Admin marks Sold
+    Reserved --> Released: hold expired (default 15d) / manual release
+    DealInProgress --> Released: buyer drops / manual release
+    Reserved --> Cancelled: reservation error/void
+    Sold --> [*]
+    Released --> [*]
+    Cancelled --> [*]
+```
 
-> **future scope upgrade path:** when the financial modules ship, a `Reservation` can spawn an `Order` with online token/payment, financing, and KYC — the reservation state machine already models the hold, so payments slot in without reworking inventory concurrency.
+**Key APIs**
+
+| Method | Endpoint | Who | Description |
+|--------|----------|-----|-------------|
+| POST | `/v1/admin/reservations` | Hub Admin (super_admin) | Reserve a car (buyer via lead or manual; token flag/amount; optimistic-locked, idempotent) |
+| GET | `/v1/admin/reservations?status=&overdue=` | Hub Admin, Super Admin | **Reserved Vehicles** worklist incl. `daysPending` |
+| GET | `/v1/admin/reservations/{id}` | Hub Admin, Super Admin | Reservation detail |
+| PATCH | `/v1/admin/reservations/{id}` | Hub Admin (super_admin) | Mark `Sold` / `Released` / add notes |
+| POST | `/v1/admin/reservations/{id}/notify-employee` | Hub Admin, Super Admin | Notify assigned Hub Employee (fallback pool) to follow up on the final deal |
+
+> **future scope upgrade path:** when financial modules ship, a `Reservation` can spawn an `Order` with online token/payment, financing, and KYC — the reservation state machine already models the hold, so payments slot in without reworking inventory concurrency.
 
 ---
 
@@ -1878,9 +1920,9 @@ Both reuse the **slot/appointment** engine (§10.5 infrastructure) to schedule t
 Every Sell/PDI request is **routed to the customer's nearest active hub**, which then **owns the entire activity** (scheduling, inspection, offer/handoff). The owning hub's **Hub Employees** manage it; the **Hub Admin** oversees it; the **Super Admin** can reassign.
 
 - The customer's location is captured as **GPS latitude/longitude** (preferred) or a **pincode that is geocoded** (fallback) — stored on `inspection_requests` (`customer_latitude`, `customer_longitude`, `pincode`).
-- The router picks the **nearest `is_active` hub** by distance to each hub's `latitude/longitude` and sets `assigned_hub_id`.
-- **No hub in range / geo missing:** the request is created with `assigned_hub_id = NULL` and parked for **manual assignment** by the Super Admin.
-- The **buyer never sees the hub identity** — they only see status and, once scheduled, the appointment address/time.
+- The router picks the **nearest `is_active` hub within a 40 km radius** by distance to each hub's `latitude/longitude` and sets `assigned_hub_id`.
+- **No hub within 40 km / geo missing:** the request is created with `assigned_hub_id = NULL` and parked for **manual assignment** by the Super Admin.
+- The **buyer sees the assigned hub** (name/area) and, once scheduled, the appointment address/time.
 
 **Shared intake → routing → scheduling → inspection → report**
 
@@ -1945,19 +1987,21 @@ flowchart LR
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/v1/inspection-requests` | Submit a Sell or PDI request (include `lat`/`lng` or `pincode`); server sets `assignedHubId` via nearest-hub routing |
-| GET | `/v1/inspection-requests/{id}` | Track status + report link when ready (no hub identity exposed) |
+| GET | `/v1/inspection-requests/{id}` | Track status + report link when ready (shows assigned hub + appointment) |
 | GET | `/v1/me/inspection-requests` | User's requests |
 | PATCH | `/v1/employee/inspection-requests/{id}` | **Assigned hub's** staff: schedule / close / add notes (hub-scoped) |
 | PATCH | `/v1/admin/inspection-requests/{id}/assign` | **Super Admin:** (re)assign the hub when auto-routing had no hub in range or a change is needed |
 
 - On **Sell** acceptance, a `Car` is created in `Draft` **in the assigned hub** with the already-ingested report → flows into §10.2 onboarding (publish gate is satisfied).
 - Staff access is **hub-scoped**: only the assigned hub's employees/admin (and the Super Admin) can act on a request.
+- **Money is offline (non-financial):** the Sell **indicative quote** and **revised final offer** are captured as **display-only reference values** (`indicative_quote_paise`, `final_offer_paise` on `inspection_requests`) so staff/seller can see the numbers — the platform performs **no payment, payout, or settlement**. *(Decision confirmed 2026-07-18.)*
+- **Scheduling model:** a Sell/PDI inspection is a **technician appointment** (`inspection_appointments`), gated by an optional **per-hub daily inspection capacity** (`hubs.daily_inspection_capacity`) and technician availability — it does **not** consume the concurrent **test-drive** slot-capacity engine (§10.5), since inspections are longer and technician-bound. *(Decision confirmed 2026-07-18.)*
 
 ---
 
 ### 10.10 Module: Notifications
 
-**Purpose:** Multi-channel, event-driven messaging. **MVP channels: Push, Email, SMS.** WhatsApp is a later add-on.
+**Purpose:** Multi-channel, event-driven messaging. **Channels: Push, Email, SMS, and WhatsApp** (all in scope for messages and updates).
 
 - **Event-driven:** subscribes to domain events (`LeadAssigned`, `TestDriveBooked`, `CarReserved`, `CarSold`, reminders).
 - **Template + channel routing** with user preferences & quiet hours.
@@ -1972,7 +2016,7 @@ flowchart LR
     R --> P[Push FCM/APNs]
     R --> S[SMS]
     R --> E[Email]
-    R -. later .-> W[WhatsApp]
+    R --> W[WhatsApp]
     P & S & E & W --> D[Delivery receipts -> retry/fallback]
 ```
 
@@ -2002,7 +2046,7 @@ flowchart LR
 | Hubs (yards) | **Onboard/edit hubs**, geo, blackout dates | **SA only** | MVP |
 | Inventory & Bays | Bays, blackout dates | HA (own hub), SA (all) | MVP |
 | **Test-Drive Config** | Slot templates, **capacity per slot**, duration, buffer, doorstep zones | HA (own hub), SA (all) | MVP |
-| Reservations | View/close/release reservations (non-financial) | HA (own hub), SA (all) | MVP |
+| Reservations | **Reserve a car** (after offline token), view **Reserved Vehicles** + days-pending, **notify Employee App** to follow up, mark Sold / Released (non-financial) — **Hub Admin only** | HA (own hub), SA (all) | MVP |
 | Users & RBAC | Staff onboarding, step-up MFA; **SA creates Hub Admins + Hub Employees & assigns hubs; HA creates Hub Employees for own hub(s)** | SA + HA (see note) | MVP |
 | Leads & CRM | Assignment rules, SLA thresholds, escalation | HA (own hub), SA (all) | MVP |
 | Sell/PDI requests | Triage assigned-hub requests; **SA (re)assigns hub** when none in range | HA (own hub), SA (all + reassign) | Phase 2 |
@@ -2029,7 +2073,7 @@ flowchart LR
 **Purpose:** Funnel and operational insights for the dealer. **MVP = basic dashboards from the primary DB;** advanced BI/DWH is a later upgrade. *(No financial/revenue reports in MVP — no money data exists yet.)*
 
 - **MVP:** lightweight dashboards read from the primary DB — interest→TD→reservation funnel, slot fill rate, staff conversion, hub utilization, inventory aging.
-- **MVP:** near-real-time ops board for hub managers (today's drives, no-shows, capacity, active reservations).
+- **MVP:** near-real-time ops board for Hub Admins (today's drives, no-shows, capacity, active reservations).
 - **Later:** stream events to a **DWH** for advanced BI; add revenue/financial reporting once the future scope payments module exists.
 
 ---
@@ -2178,7 +2222,7 @@ ON POST /integrations/inspection/reports:
 - **Security:** HMAC signature + allow-listed source; PDFs stored in a **private** bucket, served to buyers only via short-lived **pre-signed URLs**.
 - **Unmatched reports:** if no car matches the VIN/reg yet (car not created), the report is parked in `inspection_unmatched_queue` and auto-linked when the car is created, or resolved manually by Admin. Sell/PDI reports match by `inspectionRequestId`.
 - **Re-inspection / versioning:** a new report for the same car/request supersedes the previous one (`status = Superseded`, `superseded_by_id` set); history retained for audit.
-- **Certification gate (all sourcing):** a car cannot be `Certified`/`Live` without a **passing** ingested InspectionReport — enforced for **Owned and both Consigned sources** with no exception (§10.2 publish validation). Pass criteria: `recommendation IN (NO_REPAIR, MINOR_REPAIR)` and `overall_score >= dealer threshold`.
+- **Certification gate (all sourcing):** a car cannot be `Certified`/`Live` without a **passing** ingested InspectionReport — enforced for **Owned and both Consigned sources** with no exception (§10.2 publish validation). Pass criteria: `recommendation IN (NO_REPAIR, MINOR_REPAIR)` and `overall_score >= dealer_settings.min_publish_score` (configurable, default 70).
 - **PDF is mandatory:** ingestion rejects (or parks as incomplete) if no PDF is provided within the webhook TTL; buyers always see "View full inspection PDF" backed by `inspection_report_files`.
 - **Contract-first:** publish an **OpenAPI contract** for the integration endpoint; unmapped Inspection App fields remain in `raw_payload` JSONB.
 
@@ -2330,8 +2374,8 @@ The guiding rule: **get a dealer online fast with a non-financial MVP, then add 
 | Phase | Theme | Scope |
 |-------|-------|-------|
 | **MVP‑a — Get Online** | Foundation | Self-host packaging (Compose), Auth, catalog+inventory, search (Postgres FTS), car detail, **Inspection App integration (ingest PDF)** + report display, website + user app browse, admin config |
-| **MVP‑b — Capture Demand** | Core value | **Interest / Lead management**, **Test-Drive booking (concurrent slots)**, Employee app (leads + conduct TD), **non-financial Reservation / deal handoff**, notifications (push/email/SMS), basic ops dashboards |
-| **Phase 2 — Engage & Grow** | Trust + supply | Reviews & ratings, **Inspection Services (Sell request + PDI request)**, recommendations, WhatsApp channel, promotions/coupons, richer analytics |
+| **MVP‑b — Capture Demand** | Core value | **Interest / Lead management**, **Test-Drive booking (concurrent slots, Hub + Doorstep ≤40 km)**, Employee app (leads + conduct TD), **Hub Admin-only Reservation / deal handoff** (offline token, 15-day hold, Reserved Vehicles screen), notifications (push/email/SMS/**WhatsApp**), basic ops dashboards |
+| **Phase 2 — Engage & Grow** | Trust + supply | Reviews & ratings, **Inspection Services (Sell request + PDI request)**, recommendations, promotions/coupons, richer analytics |
 
 > **Scope boundary:** requirements are defined **through Phase 2 only**. Everything in scope is **non-financial** (no online payments, deposits, financing, or refunds). The architecture and data model (e.g., the `Reservation` entity, S3-compatible storage, modular monolith) are intentionally built to **not preclude** future money workflows or scale-out, but those are **out of the current scope** and are not committed requirements.
 
@@ -2347,8 +2391,8 @@ The guiding rule: **get a dealer online fast with a non-financial MVP, then add 
 | 4 | Flutter for both mobile apps | One codebase, native perf, shared design system, faster delivery |
 | 5 | Modular monolith → microservices later | Ship fast, small footprint, extract only if a large dealer needs it |
 | 6 | Redis counter + DB conditional update for slots | Fast + authoritative concurrency for capacity buckets |
-| 7 | Optimistic concurrency + soft hold TTL for **reservation** | Guarantees single winner per unique car without any payment |
-| 8 | Next.js SSR for website | SEO on the dealer's listings drives organic acquisition |
+| 7 | **Hub Admin-only reservation** + optimistic concurrency + configurable hold (default 15d) | Single winner per unique car after an offline token; reserved car fully locked; auto-release if not Sold in time; no payment |
+| 8 | **Angular (SSR/SSG)** for website; **Angular SPA** for admin | SEO on the dealer's listings drives organic acquisition; single web framework across surfaces |
 | 9 | Feature flags + config-not-fork | "Gradually add features"; every dealer stays on the upgrade path |
 | 10 | Integrate existing Inspection App (don't rebuild) | Reuse the proven app + its well-designed PDF; ingest via webhook with anti-corruption layer |
 | 11 | Reservation designed to be payment-ready | future scope payments slot in without reworking inventory concurrency |
@@ -2357,7 +2401,7 @@ The guiding rule: **get a dealer online fast with a non-financial MVP, then add 
 | 14 | Unified **Inspection Services** (Sell + PDI) on one request model | Both are user-initiated inspections via the existing app; shared scheduling + PDF ingestion, routed by `context` |
 | 15 | **Normalized inspection schema** + JSONB archive | Maps confirmed Inspection App JSON (reportId, categoryRatings, valuation) to queryable tables; PDF in object storage |
 | 16 | **Three login types + hub-scoped role hierarchy** | User→User App+Website; Hub Employee→Employee App+Inspection App (hub-scoped); Super/Hub Admin→Admin Portal only (hub_admin scoped, super_admin global); Inspection App federates existing login, accepts Hub Employee tokens only |
-| 17 | **Multi-hub scoping** for consignors, inventory & Sell/PDI | Consignor bound to one hub; consigned car shares consignor's hub; Sell/PDI routed to nearest hub; buyers never see internal hub identity (city/area + distance only) |
+| 17 | **Multi-hub scoping** for consignors, inventory & Sell/PDI | Consignor bound to one hub; consigned car shares consignor's hub; Sell/PDI routed to nearest hub within 40 km; hub info is visible to buyers, hub *scoping* restricts staff |
 
 ---
 
@@ -2394,7 +2438,7 @@ The guiding rule: **get a dealer online fast with a non-financial MVP, then add 
 ## 19. Open Questions / Assumptions
 
 - **Assumption:** AssureCars is a **product** for SMB dealers, deployed **self-hosted, one isolated instance per dealer** (no shared multi-tenant data plane).
-- **Assumption:** **MVP is fully non-financial** — no payments, deposits, financing, or refunds. Deals are closed offline by the dealer; the platform captures intent via a `Reservation`. Financial workflows are a future scope add-on.
+- **Assumption:** **MVP is fully non-financial** — no payments, deposits, financing, or refunds. Deals are closed offline by the dealer; a **Hub Admin** captures intent via a **staff-only `Reservation`** (after an offline token; users cannot self-reserve). Financial workflows are a future scope add-on.
 - **Assumption:** Test-drive concurrency is primarily achieved via **micro-slot subdivision** (short back-to-back drives on the same car) and **parallel doorstep agents**; exact defaults are admin-configurable per hub/car.
 - **Assumption:** One car = one VIN = sellable once; test drives are non-exclusive.
 - **Open:** Licensing/pricing model for dealers (per-instance subscription, tiers, paid modules) and how updates are delivered/enforced.
@@ -2402,7 +2446,11 @@ The guiding rule: **get a dealer online fast with a non-financial MVP, then add 
 - **Confirmed (Auth):** Three login types + **hub-scoped role hierarchy** — **User Login** (OTP, `user`) for User App + Website; **Employee Login** (password, `hub_employee`) for Employee App + Inspection App, hub-scoped; **Admin Login** (password + MFA) for **Admin Portal only** — `hub_admin` (hub-scoped) and `super_admin` (global). Super Admin onboards hubs/hub-admins; Hub Admin onboards hub-employees/consignors. See §4.1 and [API-Documentation.md](./API-Documentation.md) §2.
 - **Confirmed (Inspection App auth):** The **existing Inspection App login** will be updated separately to accept AssureCars-issued **Hub Employee (Employee Login)** tokens (`X-Client-Id: InspectionApp`). AssureCars does not rebuild Inspection App auth. User Login and Admin (dashboard) tokens are never valid in the Inspection App.
 - **Confirmed (Inspection App):** Output includes structured JSON (see Solution Design §9.2) plus PDF.
-- **Confirmed (Multi-hub):** A dealer instance runs one or more hubs (yards). Each **Consignor is scoped to one hub**; a consigned car shares its consignor's hub. **Sell/PDI requests route to the customer's nearest active hub** (GPS/pincode; Super Admin can reassign; manual fallback if none in range). **Buyers never see internal hub identity** — city/area + distance only, with the exact address revealed after a confirmed booking/request.
+- **Confirmed (Multi-hub):** A dealer instance runs one or more hubs (yards). Each **Consignor is scoped to one hub**; a consigned car shares its consignor's hub. **Sell/PDI requests route to the customer's nearest active hub within 40 km** (GPS/pincode; Super Admin can reassign; manual fallback if none in range). **Buyers see hub info** (name/address/city + distance); hub *scoping* restricts which staff act on a hub.
+- **Confirmed (Reservation):** Reservation is **Hub Admin-only** (super_admin superset), placed after an **offline token payment**; **removed from User App/Website**. A **reserved car is fully locked** (no interest/test-drive/second reservation). Configurable hold, **default 15 days**, then auto-release. A **Reserved Vehicles** screen shows days-pending and can **notify the Employee App** to follow up on the final deal.
+- **Confirmed (Web stack):** **Angular only** for Website (SSR/SSG) and Admin Portal (SPA) — no Next.js/React.
+- **Confirmed (Notifications):** Push, Email, SMS, and **WhatsApp** are all in scope.
+- **Confirmed (Doorstep / nearest hub):** service radius is **40 km**.
 - **Open (Inspection App):** Does the app POST a webhook natively, or does AssureCars poll / accept manual upload only at launch? Confirm `inspectionRequestId` echo-back for Sell/PDI appointments.
 - **Assumption:** Listing source (`Owned` / `ConsignedVendor` / `ConsignedIndividual`) is captured per car with a linked consignor for consigned cars; source is treated as **internal** (staff/admin) and not shown to buyers by default.
 - **Rule:** The **Inspection Report PDF is mandatory for all sourcing** — the publish gate rejects any car (owned or consigned) without a passing ingested report.
@@ -2411,11 +2459,11 @@ The guiding rule: **get a dealer online fast with a non-financial MVP, then add 
 - **Open:** Should the consigned source be **visible to buyers** (e.g., "sold on behalf of owner") for transparency, or kept internal? Confirm the dealer's preference.
 - **Open:** Financing partners & their integration contracts (per market).
 - **Open:** Certification pass/fail thresholds and re-inspection SLA.
-- **Open:** Doorstep serviceable zones and agent fleet sizing per city.
+- **Confirmed:** Doorstep serviceable radius is **40 km** from the hub. *(Open: agent fleet sizing per city.)*
 
 ---
 
-*End of Solution Design Document — v1.7*
+*End of Solution Design Document — v3.0*
 
 
 

@@ -21,8 +21,7 @@
     { id: "c6", name: "Maruti Grand Vitara", variant: "Alpha+ Hybrid", year: 2023, km: "16,300", fuel: "Hybrid", trans: "e-CVT", owner: "1st", price: "18.60", emi: "34,600", grad: "g1", score: 93, grade: "A", hub: "Whitefield Hub", source: "Owned", color: "Midnight Black" }
   ];
   const carById = (id) => cars.find((c) => c.id === id) || cars[0];
-  // Buyers never see the internal hub id/name — only city/area + distance.
-  // (Exact hub address is revealed only after a booking is confirmed.)
+  // Buyers see the hub (name + area + distance). Hub *scoping* only restricts staff.
   const areaOf = (c) => ({ "Whitefield Hub": "Whitefield, Bengaluru", "Indiranagar Hub": "Indiranagar, Bengaluru", "Koramangala Hub": "Koramangala, Bengaluru" }[c.hub] || "Bengaluru");
   const distOf = (c) => ({ "Whitefield Hub": "4 km", "Indiranagar Hub": "7 km", "Koramangala Hub": "9 km" }[c.hub] || "");
   let currentCarId = "c1";
@@ -143,7 +142,7 @@
             </div>
             <span class="chip teal">Grade ${c.grade}</span>
           </div>
-          <div class="row gap8 mt12 wrap">${chip("✔ Certified", "green")}${chip("📍 " + areaOf(c) + " · " + distOf(c))}${chip(c.owner + " owner")}</div>
+          <div class="row gap8 mt12 wrap">${chip("✔ Certified", "green")}${chip("🏢 " + c.hub)}${chip("📍 " + areaOf(c) + " · " + distOf(c))}${chip(c.owner + " owner")}</div>
 
           <div class="quick-row mt16">
             <button class="qbtn"><span class="qbi">♡</span>Save</button>
@@ -163,10 +162,9 @@
 
           <div class="section-title mt24 mb12">Choose an option</div>
           <div class="opt-grid">
-            <button class="opt" data-go="app-book"><span class="oi" style="background:var(--teal-050);color:var(--teal-600)">🚗</span><span><span class="ot">Book Test Drive</span><br><span class="os">Hub or doorstep</span></span></button>
+            <button class="opt" data-go="app-book"><span class="oi" style="background:var(--teal-050);color:var(--teal-600)">🚗</span><span><span class="ot">Book Test Drive</span><br><span class="os">Hub or doorstep (≤40 km)</span></span></button>
             <button class="opt" data-go="app-interest"><span class="oi" style="background:#eef2ff;color:#4f46e5">📞</span><span><span class="ot">Send Interest</span><br><span class="os">Get a callback</span></span></button>
-            <button class="opt" data-go="app-reserve-success"><span class="oi" style="background:var(--amber-050);color:#b9770e">🔒</span><span><span class="ot">Reserve Now</span><br><span class="os">Hold this car</span></span></button>
-            <button class="opt" data-go="app-emi"><span class="oi" style="background:var(--emerald-050);color:var(--emerald-500)">🧮</span><span><span class="ot">EMI Options</span><br><span class="os">From ₹${c.emi}/mo</span></span></button>
+            <button class="opt" data-go="app-emi"><span class="oi" style="background:var(--emerald-050);color:var(--emerald-500)">🧮</span><span><span class="ot">EMI Options</span><br><span class="os">Indicative · from ₹${c.emi}/mo</span></span></button>
           </div>
 
           <div class="section-title mt24 mb12">Key highlights</div>
@@ -191,7 +189,7 @@
             <button class="btn btn-ghost btn-block btn-sm mt12">📄 View full inspection PDF</button>
           </div>
 
-          <div class="callout info mt16"><span class="ci">🛈</span><div>This car is <b>unique inventory</b> (VIN ${"MA3EYD81S00" + c.id.slice(1)}12456). Once reserved it is held for you while the dealer closes the deal offline.</div></div>
+          <div class="callout info mt16"><span class="ci">🛈</span><div>This car is <b>unique inventory</b> (VIN ${"MA3EYD81S00" + c.id.slice(1)}12456). To buy, pay a token at the hub — the <b>Hub Admin</b> then reserves it for you and closes the deal offline.</div></div>
 
           <div class="section-title mt24 mb12">Similar cars</div>
         </div>
@@ -221,8 +219,8 @@
         <div class="pad">
           <div class="section-title mb12">1 · Choose mode</div>
           <div class="mode-toggle">
-            <div class="mode on"><div class="mt">🏢 At Hub</div><div class="ms">${areaOf(c)} · ${distOf(c)}</div></div>
-            <div class="mode"><div class="mt">🚙 Doorstep</div><div class="ms">Driver brings car to you</div></div>
+            <div class="mode on"><div class="mt">🏢 At Hub</div><div class="ms">${c.hub} · ${distOf(c)}</div></div>
+            <div class="mode"><div class="mt">🚙 Doorstep</div><div class="ms">We bring the car (within 40 km)</div></div>
           </div>
 
           <div class="section-title mt24 mb12">2 · Pick a date</div>
@@ -236,7 +234,7 @@
         </div>
       </div>
       <div class="sticky-cta">
-        <div class="price"><span class="p">Wed, 16 · 09:20</span><span class="l">At hub · ${areaOf(c)}</span></div>
+        <div class="price"><span class="p">Wed, 16 · 09:20</span><span class="l">At hub · ${c.hub}</span></div>
         <button class="btn btn-primary grow" data-go="app-book-success">Confirm Booking</button>
       </div>
     </div>`;
@@ -270,7 +268,7 @@
       ${statusbar()}
       <div class="app-topbar"><button class="icon-btn" data-go="app-detail">←</button><div><div style="font-weight:800;font-size:16px">Send Interest</div><div class="tiny muted">${c.name}</div></div></div>
       <div class="app-body"><div class="pad">
-        <div class="callout info mb16"><span class="ci">📞</span><div>A sales executive will call you back — usually within <b>15 minutes</b>.</div></div>
+        <div class="callout info mb16"><span class="ci">📞</span><div>Our hub sales team will call you back — usually within <b>15 minutes</b>. Updates come via push, SMS & <b>WhatsApp</b>.</div></div>
         <div class="field"><label>Your name</label><input class="input" value="Aarav Mehta" /></div>
         <div class="field"><label>Mobile number</label><input class="input" value="+91 98450 12345" /></div>
         <div class="field"><label>I'm interested in</label>
@@ -293,32 +291,12 @@
         <div style="font-size:22px;font-weight:800">We've got your interest!</div>
         <div class="muted" style="max-width:280px"><b>Rahul from AssureCars</b> will call you this afternoon. Lead <b>#LD-90271</b> created.</div>
         <div class="mt20" style="background:#fff;border:1px solid var(--ink-200);border-radius:16px;padding:18px;width:100%;text-align:left">
-          <div class="row gap12"><div class="avatar-xs" style="width:42px;height:42px;font-size:15px">R</div><div><div style="font-weight:700">Rahul Sharma</div><div class="tiny muted">Sales Executive · ${carById(currentCarId).hub}</div></div><span class="chip teal" style="margin-left:auto">Assigned</span></div>
+          <div class="row gap12"><div class="avatar-xs" style="width:42px;height:42px;font-size:15px">R</div><div><div style="font-weight:700">Rahul Sharma</div><div class="tiny muted">Hub Employee (Sales) · ${carById(currentCarId).hub}</div></div><span class="chip teal" style="margin-left:auto">Assigned</span></div>
         </div>
-        <button class="btn btn-primary btn-block mt20" data-go="app-reserve-success">Reserve this car instead</button>
+        <button class="btn btn-primary btn-block mt20" data-go="app-book">Book a Test Drive</button>
         <button class="btn btn-ghost btn-block" data-go="app-home">Back to Home</button>
       </div>
     </div>`;
-
-  const appReserveSuccess = () => {
-    const c = carById(currentCarId);
-    return `
-    <div class="screen" id="app-reserve-success">
-      ${statusbar()}
-      <div class="success-wrap">
-        <div class="success-check">🔒</div>
-        <div style="font-size:22px;font-weight:800">Car Reserved for You</div>
-        <div class="muted" style="max-width:290px"><b>${c.name}</b> is now held. No payment needed now — the dealer will contact you to close the deal.</div>
-        <div class="mt20" style="background:#fff;border:1px solid var(--ink-200);border-radius:16px;padding:18px;width:100%;text-align:left">
-          <div class="row between"><span class="tiny muted">Reservation</span><b class="tiny">#RS-3391</b></div>
-          <div class="row between mt12"><div style="font-weight:800">Hold expires in 48h</div><span class="chip amber">Reserved</span></div>
-          <div class="tiny muted mt8">Non-financial hold · closes offline with the dealer.</div>
-        </div>
-        <div class="callout info mt16" style="text-align:left"><span class="ci">🛈</span><div>This is a <b>single-winner</b> hold — the car is removed from search so no one else can reserve it while it's yours.</div></div>
-        <button class="btn btn-primary btn-block mt16" data-go="app-home">Done</button>
-      </div>
-    </div>`;
-  };
 
   const appServices = () => `
     <div class="screen" id="app-services">
@@ -352,7 +330,7 @@
         <div class="field"><label>Registration number</label><input class="input" value="KA-05-MJ-7788" /></div>
         <div class="field"><label>Pincode / location</label><input class="input" value="560102 · HSR Layout, Bengaluru" /></div>
         <div class="field"><label>Preferred date</label><input class="input" value="Sat, 19 Jul" /></div>
-        <div class="callout info"><span class="ci">📍</span><div>Your request is routed to your <b>nearest hub</b>, which manages the inspection, offer and everything after. You won't need to pick a hub.</div></div>
+        <div class="callout info"><span class="ci">📍</span><div>Your request is routed to your <b>nearest hub (within 40 km)</b>, which manages the inspection, offer and everything after. The assigned hub is shown once routed.</div></div>
         <div class="callout amber mt12"><span class="ci">📅</span><div>We'll schedule a technician using the same slot engine and send you the report PDF when ready.</div></div>
       </div></div>
       <div class="sticky-cta"><button class="btn btn-primary btn-block" data-go="app-interest-success">Submit Request</button></div>
@@ -385,7 +363,7 @@
       <div class="app-body"><div class="pad">
         <div class="row gap12" data-go="app-profile" style="cursor:pointer"><div class="avatar-xs" style="width:52px;height:52px;font-size:20px;background:var(--teal-600)">A</div><div class="grow"><div style="font-weight:800;font-size:17px">Aarav Mehta</div><div class="tiny muted">+91 98450 12345</div></div><span class="chip outline">Edit ›</span></div>
         <div class="mt20" style="display:flex;flex-direction:column;gap:2px">
-          ${[["♡ Saved cars", "app-saved"], ["📅 My test drives", "app-bookings"], ["🔒 My reservations", "app-reservations"], ["💰 Sell & PDI requests", "app-requests"], ["🔔 Notifications", "app-notifications"], ["⚙️ Settings", "app-settings"]].map(x => `<div class="report-row" style="padding:15px 0;cursor:pointer" data-go="${x[1]}">${x[0]}<span class="st muted">›</span></div>`).join("")}
+          ${[["♡ Saved cars", "app-saved"], ["📅 My test drives", "app-bookings"], ["💰 Sell & PDI requests", "app-requests"], ["🔔 Notifications", "app-notifications"], ["⚙️ Settings", "app-settings"]].map(x => `<div class="report-row" style="padding:15px 0;cursor:pointer" data-go="${x[1]}">${x[0]}<span class="st muted">›</span></div>`).join("")}
         </div>
       </div></div>
       ${tabbar("")}
@@ -460,7 +438,7 @@
       <div class="app-topbar"><button class="icon-btn" data-go="app-account">←</button><div style="font-weight:800;font-size:18px">Saved Cars</div></div>
       <div class="app-body"><div class="pad" style="display:flex;flex-direction:column;gap:14px">
         ${[cars[0], cars[4]].map(carCard).join("")}
-        <div class="callout info"><span class="ci">🔔</span><div>We'll alert you on <b>price drops</b> for saved cars, and if one gets reserved.</div></div>
+        <div class="callout info"><span class="ci">🔔</span><div>We'll alert you on <b>price drops</b> for saved cars, and if one is no longer available.</div></div>
       </div></div>
       ${tabbar("")}
     </div>`;
@@ -471,10 +449,10 @@
       <div class="app-topbar"><button class="icon-btn" data-go="app-home">←</button><div style="font-weight:800;font-size:18px">Notifications</div><span class="tiny" style="margin-left:auto;color:var(--teal-600);font-weight:700">Mark all read</span></div>
       <div class="app-body">
         ${[["📅", "Test drive confirmed", "Toyota Fortuner · Wed 16 Jul, 9:20 AM at Whitefield Hub", "2m", true],
-           ["📞", "Rahul will call you", "Your interest in Honda City has been assigned to a sales executive", "1h", true],
+           ["💬", "WhatsApp: Rahul will call you", "Your interest in Honda City has been assigned to our hub sales team", "1h", true],
            ["⏰", "Reminder: test drive tomorrow", "Bring a valid driving licence. OTP: 4917", "5h", false],
            ["🔻", "Price drop on a saved car", "Kia Seltos is now ₹15.25 L (was ₹15.90 L)", "1d", false],
-           ["🔒", "Reservation expiring soon", "Your hold on Hyundai Creta expires in 6 hours", "1d", false]].map(n => `
+           ["🔒", "Car reserved for you", "Whitefield Hub reserved Hyundai Creta for you after your token", "1d", false]].map(n => `
           <div class="lead-item" style="align-items:flex-start;${n[4] ? "background:var(--teal-050)" : ""}">
             <div class="score" style="background:var(--ink-100);color:var(--ink-700);font-size:18px">${n[0]}</div>
             <div class="li-body"><div class="n">${n[1]}</div><div class="s" style="white-space:normal">${n[2]}</div></div>
@@ -530,25 +508,6 @@
       <div class="sticky-cta"><div class="price"><span class="p">Fri, 18 · 10:00</span><span class="l">Whitefield Hub</span></div><button class="btn btn-primary grow" data-go="app-book-success">Confirm New Slot</button></div>
     </div>`;
 
-  const appReservations = () => `
-    <div class="screen" id="app-reservations">
-      ${statusbar()}
-      <div class="app-topbar"><button class="icon-btn" data-go="app-account">←</button><div style="font-weight:800;font-size:18px">My Reservations</div></div>
-      <div class="app-body"><div class="pad" style="display:flex;flex-direction:column;gap:14px">
-        <div class="car-card" style="cursor:default"><div class="cc-body">
-          <div class="row between"><b>Hyundai Creta</b><span class="chip amber">Reserved</span></div>
-          <div class="tiny muted mt8">#RS-3391 · held for you</div>
-          <div class="callout amber mt12" style="padding:10px 12px"><span class="ci">⏳</span><div>Hold expires in <b>5h 20m</b>. Dealer will contact you to close offline.</div></div>
-          <div class="row gap8 mt12"><button class="btn btn-ghost btn-sm grow">Contact dealer</button><button class="btn btn-ghost btn-sm grow">Release</button></div>
-        </div></div>
-        <div class="car-card" style="cursor:default;opacity:.8"><div class="cc-body">
-          <div class="row between"><b>Honda City</b><span class="chip navy">Sold</span></div>
-          <div class="tiny muted mt8">#RS-2210 · deal closed offline · 3 Jul</div>
-        </div></div>
-      </div></div>
-      ${tabbar("")}
-    </div>`;
-
   const appRequests = () => `
     <div class="screen" id="app-requests">
       ${statusbar()}
@@ -557,7 +516,7 @@
       <div class="app-body" style="padding-top:12px"><div class="pad" style="display:flex;flex-direction:column;gap:14px">
         <div class="car-card" style="cursor:default"><div class="cc-body">
           <div class="row between"><div><b>Sell · VW Polo GT</b><div class="tiny muted mt8">#IR-771 · KA-05-MJ-7788</div></div><span class="chip teal">Report Ready</span></div>
-          <div class="tiny muted mt8">📍 Handled by your nearest hub · HSR / Koramangala, Bengaluru</div>
+          <div class="tiny muted mt8">📍 Assigned hub · Koramangala Hub, Bengaluru (within 40 km)</div>
           <div class="timeline-mini mt12">
             <div class="tm-item done"><div class="tm-t">Requested</div></div>
             <div class="tm-item done"><div class="tm-t">Inspection scheduled · Sat 19 Jul</div></div>
@@ -568,7 +527,7 @@
         </div></div>
         <div class="car-card" style="cursor:default"><div class="cc-body">
           <div class="row between"><div><b>PDI · Maruti Swift (new)</b><div class="tiny muted mt8">#IR-802 · buying from another showroom</div></div><span class="chip amber">Scheduled</span></div>
-          <div class="tiny muted mt12">📍 Nearest hub · Whitefield, Bengaluru · Inspection on Sun, 20 Jul · report delivered as PDF</div>
+          <div class="tiny muted mt12">📍 Assigned hub · Whitefield Hub, Bengaluru · Inspection on Sun, 20 Jul · report delivered as PDF</div>
         </div></div>
       </div></div>
       ${tabbar("")}
@@ -626,9 +585,9 @@
       <div class="app-topbar"><button class="icon-btn" data-go="app-detail">←</button><div><div style="font-weight:800;font-size:16px">EMI Calculator</div><div class="tiny muted">${c.name}</div></div></div>
       <div class="app-body"><div class="pad">
         <div class="emi-card center">
-          <div class="tiny muted">Estimated monthly EMI</div>
+          <div class="tiny muted">Estimated monthly EMI <span class="chip outline" style="font-size:10px">Indicative</span></div>
           <div class="emi-big" style="color:var(--teal-600)">₹${c.emi}</div>
-          <div class="tiny muted">for 60 months @ 9.5% p.a.</div>
+          <div class="tiny muted">for 60 months @ 9.5% p.a. · display only, no financing</div>
         </div>
         <div class="field mt20"><label>Loan amount</label><input class="input" value="₹${(c.price * 0.8).toFixed(1)} L" /></div>
         <div class="field"><label>Down payment</label>
@@ -654,10 +613,10 @@
       <div class="frame-label"><span class="dot"></span> End-User Mobile App · Flutter (Android / iOS)</div>
       <div class="phone"><div class="notch"></div><div class="phone-screen" id="frame-app">
         ${appHome()}${appSearch()}${appDetail()}${appBook()}${appBookSuccess()}
-        ${appInterest()}${appInterestSuccess()}${appReserveSuccess()}
+        ${appInterest()}${appInterestSuccess()}
         ${appServices()}${appSell()}${appBookings()}${appAccount()}
         ${appLogin()}${appOtp()}${appFilters()}${appSaved()}${appNotifications()}
-        ${appTdDetail()}${appReschedule()}${appReservations()}${appRequests()}${appPdi()}${appProfile()}${appSettings()}${appEmi()}
+        ${appTdDetail()}${appReschedule()}${appRequests()}${appPdi()}${appProfile()}${appSettings()}${appEmi()}
       </div></div>
     </div>`;
 
@@ -708,7 +667,7 @@
       <div class="web-section" style="background:var(--ink-050)">
         <h2 class="center">How AssureCars works</h2>
         <div class="web-grid" style="grid-template-columns:repeat(4,1fr);margin-top:30px">
-          ${[["🔍", "Browse & filter", "Search certified inventory with real photos and specs."], ["📄", "Check the report", "See the full 200-point inspection PDF before you commit."], ["🚙", "Test drive", "At a hub or doorstep — pick a slot that suits you."], ["🔒", "Reserve", "Hold the car; close the deal with the dealer offline."]].map(x => `<div style="background:#fff;border:1px solid var(--ink-200);border-radius:16px;padding:22px"><div style="font-size:30px">${x[0]}</div><div style="font-weight:700;margin:10px 0 6px">${x[1]}</div><div class="tiny muted">${x[2]}</div></div>`).join("")}
+          ${[["🔍", "Browse & filter", "Search certified inventory with real photos, specs and hub location."], ["📄", "Check the report", "See the full 200-point inspection PDF before you commit."], ["🚙", "Test drive", "At a hub or doorstep (within 40 km) — pick a slot that suits you."], ["🤝", "Close the deal", "Pay a token at the hub; the Hub Admin reserves it and completes the sale offline."]].map(x => `<div style="background:#fff;border:1px solid var(--ink-200);border-radius:16px;padding:22px"><div style="font-size:30px">${x[0]}</div><div style="font-weight:700;margin:10px 0 6px">${x[1]}</div><div class="tiny muted">${x[2]}</div></div>`).join("")}
         </div>
       </div>
       <div class="web-cta-band">
@@ -776,7 +735,7 @@
             <div class="mt20" style="font-size:34px;font-weight:800">₹${c.price} Lakh</div>
             <div class="tiny muted">Fixed price · EMI from ₹${c.emi}/mo</div>
             <div class="row gap12 mt20"><button class="btn btn-primary grow" data-go="web-book">Book Test Drive</button><button class="btn btn-ghost grow" data-go="web-signin">Send Interest</button></div>
-            <button class="btn btn-dark btn-block mt12" data-go="web-signin">🔒 Reserve this car</button>
+            <div class="callout info mt12" style="text-align:left"><span class="ci">🤝</span><div>To buy, pay a token at the hub — the <b>Hub Admin</b> reserves the car for you and closes the deal offline.</div></div>
             <div class="quick-row mt12">
               <button class="qbtn"><span class="qbi">♡</span>Save</button>
               <button class="qbtn"><span class="qbi">↗</span>Share</button>
@@ -788,7 +747,7 @@
               <div class="tiny muted mt8">60 months · 9.5% · 20% down</div>
             </div>
             <div class="panel mt16" style="border-radius:14px"><div class="panel-body">
-              <div class="row gap12"><div style="font-size:22px">📍</div><div><b>${areaOf(c)}</b><div class="tiny muted">${distOf(c)} away · available for doorstep test drive</div></div></div>
+              <div class="row gap12"><div style="font-size:22px">📍</div><div><b>${c.hub}</b><div class="tiny muted">${areaOf(c)} · ${distOf(c)} away · doorstep within 40 km</div></div></div>
             </div></div>
           </div>
         </div>
@@ -827,7 +786,7 @@
               <div class="field"><label>Pincode / location</label><input class="input" value="560102" /></div>
               <div class="field full"><label>Your mobile number</label><input class="input" value="+91 98450 12345" /></div>
             </div>
-            <div class="callout info mt12"><span class="ci">📍</span><div>We route your request to the <b>nearest hub</b> based on your location — that hub's team schedules the inspection and makes the offer.</div></div>
+            <div class="callout info mt12"><span class="ci">📍</span><div>We route your request to the <b>nearest hub (within 40 km)</b> based on your location — that hub's team schedules the inspection and makes the offer.</div></div>
             <button class="btn btn-primary mt8" data-go="web-listing">Get instant quote →</button>
           </div>
           <div>
@@ -910,8 +869,8 @@
         <div class="web-grid" style="grid-template-columns:1.3fr 1fr;gap:34px;margin-top:0">
           <div>
             <h2>Book a test drive</h2>
-            <p class="muted mb20">${c.name} · ${c.year} · ${areaOf(c)}</p>
-            <div class="mode-toggle" style="max-width:420px"><div class="mode on"><div class="mt">🏢 At Hub</div><div class="ms">${areaOf(c)} · ${distOf(c)}</div></div><div class="mode"><div class="mt">🚙 Doorstep</div><div class="ms">We bring the car to you</div></div></div>
+            <p class="muted mb20">${c.name} · ${c.year} · ${c.hub} · ${areaOf(c)}</p>
+            <div class="mode-toggle" style="max-width:420px"><div class="mode on"><div class="mt">🏢 At Hub</div><div class="ms">${c.hub} · ${distOf(c)}</div></div><div class="mode"><div class="mt">🚙 Doorstep</div><div class="ms">We bring the car (within 40 km)</div></div></div>
             <div class="section-title mt24 mb12">Pick a date</div>
             <div class="day-row">${days.map((d, i) => `<div class="day ${i === 2 ? "on" : ""}"><div class="dn">${d[0]}</div><div class="dd">${d[1]}</div></div>`).join("")}</div>
             <div class="section-title mt24 mb8">Pick a time slot</div>
@@ -936,7 +895,7 @@
 
   const buildWeb = () => `
     <div class="frame-wrap">
-      <div class="frame-label"><span class="dot"></span> Customer Website · Next.js (SSR / SEO)</div>
+      <div class="frame-label"><span class="dot"></span> Customer Website · Angular (SSR / SEO)</div>
       <div class="desktop">
         <div class="browser-bar"><span class="dots"><i></i><i></i><i></i></span><div class="url"><span class="lock">🔒</span> www.premiumcars-bengaluru.com</div></div>
         <div class="desktop-screen" id="frame-web">
@@ -965,7 +924,7 @@
         <div class="gl">Operations</div>
         <div class="nav-item ${active === "leads" ? "active" : ""}" data-go="admin-leads"><span class="ni">🎯</span> Leads / CRM</div>
         <div class="nav-item ${active === "td" ? "active" : ""}" data-go="admin-td"><span class="ni">📅</span> Test-Drive Config</div>
-        <div class="nav-item ${active === "res" ? "active" : ""}" data-go="admin-res"><span class="ni">🔒</span> Reservations</div>
+        <div class="nav-item ${active === "res" ? "active" : ""}" data-go="admin-res"><span class="ni">🔒</span> Reserved Vehicles</div>
         <div class="nav-item ${active === "hubs" ? "active" : ""}" data-go="admin-hubs"><span class="ni">🏢</span> Hubs & Staff</div>
       </div>
       <div class="nav-group">
@@ -1117,30 +1076,71 @@
   const adminRes = () => `
     <div class="screen" id="admin-res">
       <div class="admin">${adminSidebar("res")}
-        <div class="admin-main">${adminTop("Reservations (Non-Financial)")}
+        <div class="admin-main">${adminTop("Reserved Vehicles (Non-Financial · Hub Admin)")}
           <div class="admin-content">
+            <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
+              ${[["Active reservations", "9", "🔒", "held for a specific buyer"], ["Overdue (> 15 days)", "1", "🟠", "auto-release pending"], ["Sold this month", "61", "🟢", "closed offline"]].map(k => `<div class="kpi"><div class="kt">${k[2]} ${k[0]}</div><div class="kv">${k[1]}</div><div class="tiny muted">${k[3]}</div></div>`).join("")}
+            </div>
             <div class="panel">
-              <div class="panel-head"><h3>Active reservations</h3><span class="chip amber" style="margin-left:auto">2 expiring in &lt; 6h</span></div>
+              <div class="panel-head"><h3>Reserved vehicles</h3><button class="btn btn-primary btn-sm" style="margin-left:auto" data-go="admin-reserveform">+ Reserve a car</button></div>
               <table class="tbl">
-                <thead><tr><th>Car</th><th>Reserved by</th><th>Hold expires</th><th>Assigned staff</th><th>Status</th><th>Action</th></tr></thead>
+                <thead><tr><th>Car</th><th>Reserved for</th><th>Token</th><th>Days pending</th><th>Status</th><th>Follow-up</th><th>Action</th></tr></thead>
                 <tbody>
-                  ${[[cars[1], "Neha Gupta", "in 5h 20m", "Rahul S.", "Reserved", "amber"],
-                     [cars[0], "Vikram S.", "in 41h", "Meena T.", "DealInProgress", "teal"],
-                     [cars[4], "Karan M.", "in 22h", "Rahul S.", "Reserved", "amber"]].map(r => `
+                  ${[[cars[1], "Neha Gupta", "₹25,000 ✔", "3 / 15", "Reserved", "amber", "Rahul S."],
+                     [cars[0], "Vikram S. (Lead #LD-90188)", "₹50,000 ✔", "6 / 15", "DealInProgress", "teal", "Meena T."],
+                     [cars[4], "Karan M.", "₹25,000 ✔", "16 / 15", "Overdue", "rose", "—"]].map(r => `
                     <tr>
-                      <td><div class="car-mini"><div class="car-img ${r[0].grad} thumb">${carSVG()}</div><b>${r[0].name}</b></div></td>
-                      <td>${r[1]}</td><td class="tiny">${r[2]}</td><td>${r[3]}</td>
+                      <td><div class="car-mini"><div class="car-img ${r[0].grad} thumb">${carSVG()}</div><div><b>${r[0].name}</b><div class="tiny muted">${r[0].hub}</div></div></div></td>
+                      <td>${r[1]}</td><td class="tiny">${r[2]}</td>
+                      <td><b class="${r[4] === "Overdue" ? "" : ""}" style="color:${r[4] === "Overdue" ? "var(--rose-500)" : "var(--ink-900)"}">${r[3]}</b></td>
                       <td>${chip(r[4], r[5])}</td>
+                      <td class="tiny">${r[6] === "—" ? '<button class="btn btn-ghost btn-sm">Notify Employee App</button>' : `Notified ${r[6]}`}</td>
                       <td><div class="row gap6"><button class="btn btn-primary btn-sm">Mark Sold</button><button class="btn btn-ghost btn-sm">Release</button></div></td>
                     </tr>`).join("")}
                 </tbody>
               </table>
             </div>
-            <div class="callout info"><span class="ci">🛈</span><div>Reservations are a <b>single-winner optimistic hold</b> — no payment. Closing happens offline; a TTL job auto-releases stale holds back to <b>Live</b>.</div></div>
+            <div class="callout info"><span class="ci">🛈</span><div><b>Hub Admin only.</b> A car is reserved after an <b>offline token</b> (recorded for reference — no payment/ledger). A reserved car is <b>fully locked</b> (no interest / test drive / second reservation). If not marked <b>Sold</b> within the configurable hold (<b>default 15 days</b>), it auto-releases back to <b>Live</b>. Use <b>Notify Employee App</b> to have the assigned Hub Employee follow up on the final deal.</div></div>
           </div>
         </div>
       </div>
     </div>`;
+
+  const adminReserveForm = () => {
+    const c = cars[0];
+    return `
+    <div class="screen" id="admin-reserveform">
+      <div class="admin">${adminSidebar("res")}
+        <div class="admin-main">
+          <div class="admin-top"><button class="btn btn-ghost btn-sm" data-go="admin-res">← Back</button><h1 style="font-size:17px">Reserve a car</h1><span class="chip navy" style="margin-left:16px">Hub Admin</span></div>
+          <div class="admin-content"><div class="two-col">
+            <div class="panel"><div class="panel-head"><h3>Reservation details</h3></div><div class="panel-body">
+              <div class="field"><label>Car (Live only)</label><select><option>Toyota Fortuner · Whitefield Hub · ₹38.75 L</option><option>Honda City · Indiranagar Hub · ₹14.90 L</option></select></div>
+              <div class="field"><label>Buyer</label><div class="seg"><button class="on">Link a lead</button><button>Enter manually</button></div></div>
+              <div class="field"><label>Lead / enquiry</label><select><option>Vikram Singh · #LD-90188 · Fortuner</option><option>Neha Gupta · #LD-90205 · Creta</option></select></div>
+              <div class="form-grid">
+                <div class="field"><label>Buyer name (if manual)</label><input class="input" placeholder="e.g. Karan Malhotra" /></div>
+                <div class="field"><label>Buyer phone (if manual)</label><input class="input" placeholder="+91 …" /></div>
+              </div>
+              <div class="cfg-row"><div class="cfg-label"><b>Token received (offline)</b><span>Reference only — no payment is taken here</span></div><div class="toggle on"></div></div>
+              <div class="field"><label>Token amount (reference)</label><input class="input" value="₹25,000" /></div>
+              <div class="field"><label>Hold period</label><select><option>15 days (default)</option><option>7 days</option><option>30 days</option></select></div>
+              <div class="row gap8 mt8"><button class="btn btn-primary btn-sm" data-go="admin-res">Reserve car</button><button class="btn btn-ghost btn-sm" data-go="admin-res">Cancel</button></div>
+            </div></div>
+            <div class="panel"><div class="panel-head"><h3>What happens next</h3></div><div class="panel-body">
+              <div class="timeline-mini">
+                <div class="tm-item done"><div class="tm-t">Car → Reserved & locked</div><div class="tm-s">Removed from search; interest/test-drive disabled</div></div>
+                <div class="tm-item active"><div class="tm-t">Hold runs for 15 days</div><div class="tm-s">Shown on the Reserved Vehicles screen with days-pending</div></div>
+                <div class="tm-item"><div class="tm-t">Notify Employee App</div><div class="tm-s">Assigned Hub Employee follows up on the final deal</div></div>
+                <div class="tm-item"><div class="tm-t">Mark Sold / auto-release</div><div class="tm-s">Sold closes offline; else auto-releases to Live at day 15</div></div>
+              </div>
+              <div class="callout info mt12"><span class="ci">🛈</span><div>Buyer is identified by a <b>linked lead</b> or a <b>manual name + phone</b>. All money stays offline.</div></div>
+            </div></div>
+          </div></div>
+        </div>
+      </div>
+    </div>`;
+  };
 
   const adminCarForm = () => `
     <div class="screen" id="admin-carform">
@@ -1252,7 +1252,7 @@
                 </tbody></table>
               </div>
               <div class="panel"><div class="panel-head"><h3>Staff on shift</h3></div><div class="panel-body">
-                ${[["Rahul Sharma", "Sales Executive", "Whitefield", "av"], ["Meena T.", "Sales Executive", "Indiranagar", "av"], ["Arjun P.", "Test-Drive Agent", "Whitefield", "av"], ["Sana K.", "Hub Manager", "Koramangala", "av"]].map(s => `<div class="cfg-row" style="padding:12px 0"><div class="avatar-xs">${s[0][0]}</div><div class="cfg-label"><b style="font-size:13.5px">${s[0]}</b><span>${s[1]} · ${s[2]}</span></div><span class="status-dot" style="color:var(--emerald-500)">Online</span></div>`).join("")}
+                ${[["Rahul Sharma", "Hub Employee · Sales", "Whitefield", "av"], ["Meena T.", "Hub Employee · Sales", "Indiranagar", "av"], ["Arjun P.", "Hub Employee · Test-Drive Agent", "Whitefield", "av"], ["Sana K.", "Hub Admin", "Koramangala", "av"]].map(s => `<div class="cfg-row" style="padding:12px 0"><div class="avatar-xs">${s[0][0]}</div><div class="cfg-label"><b style="font-size:13.5px">${s[0]}</b><span>${s[1]} · ${s[2]}</span></div><span class="status-dot" style="color:var(--emerald-500)">Online</span></div>`).join("")}
               </div></div>
             </div>
           </div>
@@ -1282,7 +1282,7 @@
                 <div class="cfg-row" style="padding:9px 0"><div class="cfg-label"><span>Car</span><b>Toyota Fortuner</b></div></div>
                 <div class="cfg-row" style="padding:9px 0"><div class="cfg-label"><span>Assigned</span><b>Rahul S.</b></div></div>
               </div></div>
-              <button class="btn btn-primary btn-block" data-go="admin-res">Create reservation →</button>
+              <button class="btn btn-primary btn-block" data-go="admin-reserveform">Reserve car for this lead →</button>
             </div>
           </div></div>
         </div>
@@ -1348,9 +1348,14 @@
                 <div class="field"><label>Accent color</label><div class="row gap8"><div style="width:40px;height:40px;border-radius:10px;background:var(--navy-900)"></div><input class="input grow" value="#0A1628" /></div></div>
               </div>
               <div class="field"><label>Custom domain</label><input class="input" value="premiumcars-bengaluru.com" /></div>
+              <div class="form-grid">
+                <div class="field"><label>Reservation hold (days)</label><input class="input" type="number" value="15" /></div>
+                <div class="field"><label>Min publish score</label><input class="input" type="number" value="70" /></div>
+              </div>
+              <div class="tiny muted">Hold = days a reserved car is kept before auto-release. Min publish score = inspection score required (with a passing recommendation) to certify & list a car.</div>
             </div></div>
             <div class="panel"><div class="panel-head"><h3>Provider keys</h3></div><div class="panel-body">
-              ${[["SMS (MSG91)", "•••• 8842", true], ["Email (SendGrid)", "•••• 1f9c", true], ["Push (FCM)", "Configured", true], ["WhatsApp Business", "Not set", false], ["Maps (Google)", "•••• a1b2", true]].map(p => `<div class="cfg-row" style="padding:12px 0"><div class="cfg-label"><b style="font-size:13.5px">${p[0]}</b><span>${p[1]}</span></div>${p[2] ? chip("Connected", "green") : chip("Add key", "outline")}</div>`).join("")}
+              ${[["SMS (MSG91)", "•••• 8842", true], ["Email (SendGrid)", "•••• 1f9c", true], ["Push (FCM)", "Configured", true], ["WhatsApp Business API", "•••• 7c3d", true], ["Maps (Google)", "•••• a1b2", true]].map(p => `<div class="cfg-row" style="padding:12px 0"><div class="cfg-label"><b style="font-size:13.5px">${p[0]}</b><span>${p[1]}</span></div>${p[2] ? chip("Connected", "green") : chip("Add key", "outline")}</div>`).join("")}
             </div></div>
           </div></div>
         </div>
@@ -1364,7 +1369,7 @@
           <div class="admin-content">
             <div class="callout info mb16"><span class="ci">🚩</span><div>Enable newly shipped modules at your own pace — this is the core of the "gradually add features" rollout. Config, not code forks.</div></div>
             <div class="panel"><div class="panel-body">
-              ${[["Reviews & Ratings", "Phase 2 · post-drive feedback", true], ["Inspection Services (Sell + PDI)", "Phase 2 · user-initiated requests", true], ["WhatsApp notifications", "Phase 2 channel", false], ["Recommendations", "Similar cars & price-drop", false], ["Promotions / Coupons", "Phase 2 marketing", false], ["Doorstep test drives", "Concurrent-slot doorstep fleet", true]].map(f => `<div class="cfg-row"><div class="cfg-label"><b style="font-size:14px">${f[0]}</b><span>${f[1]}</span></div><div class="toggle ${f[2] ? "on" : ""}"></div></div>`).join("")}
+              ${[["Reviews & Ratings", "Phase 2 · post-drive feedback", true], ["Inspection Services (Sell + PDI)", "Phase 2 · user-initiated requests", true], ["WhatsApp notifications", "In-scope channel · messages & updates", true], ["Recommendations", "Similar cars & price-drop", false], ["Promotions / Coupons", "Phase 2 marketing", false], ["Doorstep test drives", "Concurrent-slot doorstep fleet (within 40 km)", true]].map(f => `<div class="cfg-row"><div class="cfg-label"><b style="font-size:14px">${f[0]}</b><span>${f[1]}</span></div><div class="toggle ${f[2] ? "on" : ""}"></div></div>`).join("")}
             </div></div>
           </div>
         </div>
@@ -1373,11 +1378,11 @@
 
   const buildAdmin = () => `
     <div class="frame-wrap">
-      <div class="frame-label"><span class="dot"></span> Admin Panel · React SPA (dealer self-service)</div>
+      <div class="frame-label"><span class="dot"></span> Admin Panel · Angular SPA (dealer self-service)</div>
       <div class="desktop">
         <div class="browser-bar"><span class="dots"><i></i><i></i><i></i></span><div class="url"><span class="lock">🔒</span> admin.premiumcars-bengaluru.com</div></div>
         <div class="desktop-screen" id="frame-admin">
-          ${adminDash()}${adminInventory()}${adminTd()}${adminLeads()}${adminRes()}
+          ${adminDash()}${adminInventory()}${adminTd()}${adminLeads()}${adminRes()}${adminReserveForm()}
           ${adminCarForm()}${adminConsignors()}${adminInspections()}${adminHubs()}${adminLeadDetail()}${adminReports()}${adminUsers()}${adminBranding()}${adminFlags()}
         </div>
       </div>
@@ -1457,9 +1462,9 @@
         <div class="mt20" style="width:100%;text-align:left">
           <div class="field"><label>Buyer interest level</label><div class="seg"><button>Cold</button><button class="on">Warm</button><button>Hot 🔥</button></div></div>
           <div class="field"><label>Next action</label>
-            <div class="seg"><button class="on">Reserve car</button><button>Follow up</button><button>Lost</button></div>
+            <div class="seg"><button class="on">Ready to buy</button><button>Follow up</button><button>Lost</button></div>
           </div>
-          <div class="field"><label>Notes</label><textarea class="input" rows="3">Loved the drive. Wants to reserve; will confirm finance with family by tomorrow.</textarea></div>
+          <div class="field"><label>Notes</label><textarea class="input" rows="3">Loved the drive. Ready to buy — will pay token; Hub Admin to reserve.</textarea></div>
         </div>
         <button class="btn btn-primary btn-block" data-go="emp-sched">Save & move to Negotiation</button>
       </div>
@@ -1534,7 +1539,7 @@
         <div class="field mt16"><label>Update status</label><div class="seg"><button>Qualified</button><button class="on">Negotiation</button><button>Won</button><button>Lost</button></div></div>
         <div class="field"><label>Log note</label><textarea class="input" rows="2" placeholder="Disposition / next action…"></textarea></div>
       </div></div>
-      <div class="sticky-cta"><button class="btn btn-primary btn-block" data-go="emp-reservations">Reserve car for buyer</button></div>
+      <div class="sticky-cta"><button class="btn btn-primary btn-block" data-go="emp-reservations">Mark buyer ready · Hub Admin reserves</button></div>
     </div>`;
 
   const empInventory = () => `
@@ -1556,19 +1561,19 @@
   const empReservations = () => `
     <div class="screen" id="emp-reservations">
       ${statusbar()}
-      <div class="app-topbar"><button class="icon-btn" data-go="emp-leads">←</button><div style="font-weight:800;font-size:18px">Reservations</div></div>
+      <div class="app-topbar"><button class="icon-btn" data-go="emp-leads">←</button><div style="font-weight:800;font-size:18px">Reservation Follow-Up</div></div>
       <div class="app-body"><div class="pad" style="display:flex;flex-direction:column;gap:14px">
+        <div class="callout info"><span class="ci">🔔</span><div>Your <b>Hub Admin</b> flagged these reserved cars for you to <b>follow up on the final deal</b>. Reservations are read-only here — the Hub Admin marks them Sold or releases them.</div></div>
         <div class="car-card" style="cursor:default"><div class="cc-body">
           <div class="row between"><b>Hyundai Creta</b><span class="chip amber">Reserved</span></div>
-          <div class="tiny muted mt8">Neha Gupta · #RS-3391 · expires in 5h</div>
-          <div class="row gap8 mt12"><button class="btn btn-primary btn-sm grow" data-go="emp-sched">Mark Sold</button><button class="btn btn-ghost btn-sm grow">Release</button></div>
+          <div class="tiny muted mt8">Neha Gupta · #RS-3391 · 3 / 15 days pending</div>
+          <div class="row gap8 mt12"><a class="btn btn-primary btn-sm grow">📞 Call buyer</a><a class="btn btn-ghost btn-sm grow">💬 WhatsApp</a></div>
         </div></div>
         <div class="car-card" style="cursor:default"><div class="cc-body">
           <div class="row between"><b>Toyota Fortuner</b><span class="chip teal">Deal in progress</span></div>
-          <div class="tiny muted mt8">Vikram S. · #RS-3402 · expires in 41h</div>
-          <div class="row gap8 mt12"><button class="btn btn-primary btn-sm grow" data-go="emp-sched">Mark Sold</button><button class="btn btn-ghost btn-sm grow">Add note</button></div>
+          <div class="tiny muted mt8">Vikram S. · #RS-3402 · 6 / 15 days pending</div>
+          <div class="row gap8 mt12"><a class="btn btn-primary btn-sm grow">📞 Call buyer</a><button class="btn btn-ghost btn-sm grow">Add note</button></div>
         </div></div>
-        <div class="callout info"><span class="ci">🛈</span><div>Non-financial holds — close the deal offline, then mark <b>Sold</b>.</div></div>
       </div></div>
       ${empTab("")}
     </div>`;
@@ -1682,7 +1687,6 @@
       "app-book": [appBook, "frame-app"],
       "app-book-success": [appBookSuccess, "frame-app"],
       "app-interest": [appInterest, "frame-app"],
-      "app-reserve-success": [appReserveSuccess, "frame-app"],
       "app-emi": [appEmi, "frame-app"],
       "web-detail": [webDetail, "frame-web"],
       "web-book": [webBook, "frame-web"]

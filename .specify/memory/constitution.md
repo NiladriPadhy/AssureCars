@@ -1,6 +1,29 @@
 <!--
 Sync Impact Report
-Version change: 1.1.0 → 2.0.0 (2026-07-18)
+Version change: 2.0.0 → 3.0.0 (2026-07-18)
+MAJOR — incompatible redefinitions confirmed with stakeholder:
+  - Buyer HUB VISIBILITY REVERSED: buyers MAY now see hub identity
+    (name/address/city). The prior "buyers MUST NOT see internal hub
+    identity" rule is removed (Principle VII + Domain Constraints).
+  - RESERVATION MODEL redefined: reservations are STAFF-ONLY (Hub Admin;
+    super_admin superset), created after an OFFLINE token payment. Users
+    can NO LONGER self-reserve (removed from User App + Website). A
+    reserved car is FULLY LOCKED (no interest, test drive, or second
+    reservation) until Sold or released. Configurable hold, DEFAULT 15
+    DAYS; auto-release if not Sold in time (Principles III & IV).
+  - Web stack finalized: Angular ONLY for Website + Admin (no Next.js/React).
+  - Roles UNIFIED across all docs: Super Admin, Hub Admin, Hub Employee, User.
+  - WhatsApp confirmed as an in-scope notification channel.
+  - Doorstep test-drive / nearest-hub service radius set to 40 km.
+Propagated to:
+  - ✅ Docs/Solution-Design-Document.md (v3.0)
+  - ✅ Docs/API-Documentation.md (hub visibility, reservation endpoints, roles, WhatsApp)
+  - ✅ database/migrations/005_reservation_redesign_and_settings.sql
+  - ✅ README.md
+  - ✅ Docs/Phase-Wise-Development-Plan.md
+  - ✅ prototype/app.js (removed user reserve flow; hub shown; Reserved Vehicles admin screen + reserve form; roles; WhatsApp; Angular labels)
+
+Prior report (1.1.0 → 2.0.0, 2026-07-18)
 MAJOR — incompatible redefinition of Principle VII (client-access matrix):
   - Introduced hub-centric role hierarchy: super_admin (global), hub_admin
     (hub-scoped), hub_employee (hub-scoped), user.
@@ -98,7 +121,9 @@ captures intent; dealers close deals offline.
 - An agreed **commission rate (%)** MAY be recorded on a Consignor at onboarding
   as non-financial reference data. Recording the rate is permitted; **calculating
   payouts, tracking balances, or settling commissions MUST remain offline**.
-- Reservations are optimistic, non-financial holds with TTL — not purchases.
+- Reservations are **staff-created (Hub Admin) non-financial holds** placed
+  after an **offline token payment**; users cannot self-reserve. Any token
+  amount is recorded as **reference/display only** (no ledger/settlement).
 - Financial workflows MAY be designed for future extensibility but MUST NOT
   appear in current scope specs, tasks, or migrations without a constitution
   amendment.
@@ -111,10 +136,15 @@ until the core demand-capture engine is proven.
 Every vehicle is a unique sellable unit (one VIN = quantity 1). Concurrency
 rules differ by operation type and MUST be enforced in domain logic and tests.
 
-- **Reserve / mark sold:** exactly one winner per car via optimistic lock on
-  `row_version` + state machine (`Draft → … → Reserved → Sold`).
+- **Reserve / mark sold:** a **Hub Admin** (super_admin superset) reserves a
+  car after an offline token payment; exactly one winner per car via optimistic
+  lock on `row_version` + state machine (`Draft → … → Reserved → Sold`). A
+  **reserved car is fully locked** — no interest, test drive, or second
+  reservation until it is Sold or released. If not marked Sold within the
+  configurable hold (**default 15 days**) the system auto-releases it to Live.
 - **Test drive booking:** many bookings allowed, capped by slot capacity via
-  Redis counter + DB conditional update.
+  Redis counter + DB conditional update. Doorstep and nearest-hub service is
+  bounded to a **40 km** radius.
 - Idempotency keys MUST be honored on all inventory transitions and bookings.
 - Integration tests MUST prove: N parallel bookings on capacity K → exactly K
   succeed; duplicate idempotent requests → single effect; reservation race →
@@ -181,7 +211,7 @@ gateway MUST reject tokens presented to unauthorized clients.
 | `super_admin` | Admin | Admin Portal | **All hubs (global)** | Onboards hubs, hub admins, hub employees, consignors; dealer-wide settings. One seeded/static login. |
 | `hub_admin` | Admin | Admin Portal | **Assigned hub(s)** | Onboards hub employees + consignors for their hub(s); manages their hub catalog. |
 | `hub_employee` | Employee | Employee App, Inspection App | **Assigned hub(s)** | Runs sales, test-drive, and inspection ops for their hub(s). |
-| `user` | User | User App, Website | — | Buyer/seller; never sees internal hub identity. |
+| `user` | User | User App, Website | — | Buyer/seller; sees hub info (name/city + distance); cannot self-reserve. |
 
 - Every request MUST include `Authorization: Bearer <JWT>` and
   `X-Client-Id: UserApp|Website|EmployeeApp|AdminPortal|InspectionApp`.
@@ -194,9 +224,9 @@ gateway MUST reject tokens presented to unauthorized clients.
   (`employee_hubs`). `super_admin` is global.
 - **Only `super_admin` creates Hub Admins and Hubs.** `hub_admin` and
   `super_admin` create Hub Employees and consignors for a hub.
-- **Buyers (User/Guest) MUST NOT see internal hub identity** (hub id/name/code).
-  City/area and distance MAY be shown; the exact appointment address is revealed
-  only after a booking/request is confirmed.
+- **Buyers MAY see hub information** (name, address, city) on listings and car
+  detail; distance MAY also be shown. Hub scoping still governs which **staff**
+  can act on a hub's resources (below).
 - RBAC permissions MUST enforce staff authorization beyond client + hub scoping.
 - Admin actions, inventory-state changes, capacity changes, and reservations
   MUST be audit-logged.
@@ -206,7 +236,9 @@ gateway MUST reject tokens presented to unauthorized clients.
 *Rationale:* A dealer runs multiple hubs (yards) from one instance; hub-scoped
 roles keep each hub's staff to their own inventory and customers, while a global
 super admin governs the whole dealership. Client-scoped tokens prevent lateral
-access (e.g., user tokens in admin or inspection flows).
+access (e.g., user tokens in admin or inspection flows). Hub identity is
+customer-facing (buyers can see where a car is); hub *scoping* is a staff
+authorization concern, not a buyer-privacy one.
 
 ## Technology Stack & Platform Constraints
 
@@ -239,11 +271,17 @@ access (e.g., user tokens in admin or inspection flows).
   inspection). Its `hub_employee` staff manage it; `hub_admin` administers it;
   `super_admin` spans all hubs.
 - **Sell/PDI routing:** user-initiated Sell/PDI requests are routed to the
-  customer's **nearest active hub** (GPS, fallback pincode geocode); `super_admin`
-  may reassign; if no hub is in range the request awaits manual assignment.
-- **Buyer hub privacy:** the internal hub identity (id/name/code) MUST NOT be
-  exposed to buyers; city/area + distance MAY be shown; exact address only after
-  a confirmed booking/request.
+  customer's **nearest active hub within 40 km** (GPS, fallback pincode geocode);
+  `super_admin` may reassign; if no hub is in range the request awaits manual
+  assignment.
+- **Buyer hub visibility:** buyers MAY see hub name/address/city and distance on
+  listings and detail. (Hub *scoping* still restricts which staff act on a hub.)
+- **Reservation:** a **Hub Admin** (super_admin superset) reserves a car after an
+  offline token payment; **users cannot self-reserve** (no reserve action in User
+  App/Website). Reserved cars are **fully locked** (no interest/test-drive/second
+  reservation). Configurable hold, **default 15 days**, then auto-release.
+- **Notifications:** Push, Email, SMS, and **WhatsApp** are in-scope channels.
+- **Doorstep test drive:** offered from a hub within a **40 km** service radius.
 - **Phase scope:** MVP-a (Get Online) → MVP-b (Capture Demand) → Phase 2
   (Engage & Grow). Financial module is future scope only.
 - **Flagship feature:** Concurrent-slot test-drive booking engine with
@@ -324,4 +362,4 @@ simpler alternatives.
 living references; where they conflict with this constitution, the constitution
 prevails until docs are amended.
 
-**Version**: 2.0.0 | **Ratified**: 2026-07-12 | **Last Amended**: 2026-07-18
+**Version**: 3.0.0 | **Ratified**: 2026-07-12 | **Last Amended**: 2026-07-18

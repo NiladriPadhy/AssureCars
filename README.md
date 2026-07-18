@@ -47,8 +47,9 @@ flowchart LR
     C -->|Browse| D[Save / Compare]
     C -->|Interested| E[Send Interest<br/>Lead created]
     C -->|Ready| F[Book Test Drive<br/>Concurrent slots]
-    F --> G[OTP Check-in<br/>Hub or Doorstep]
-    G --> H[Reserve Car<br/>Non-financial hold]
+    F --> G[OTP Check-in<br/>Hub or Doorstep ≤40 km]
+    G --> J[Token paid offline]
+    J --> H[Hub Admin reserves car<br/>15-day hold]
     H --> I[Deal Closed<br/>Offline by dealer]
 ```
 
@@ -98,8 +99,8 @@ The interactive prototype models all four client surfaces plus the external insp
 | Surface | Platform | Users | Auth |
 |---------|----------|-------|------|
 | **User Mobile App** | Android + iOS (Flutter) | Buyers / sellers | OTP (User Login) |
-| **Customer Website** | Web — Next.js SSR | Guests + buyers | OTP for authenticated flows |
-| **Admin Panel** | Web SPA (React) | Super Admin, Hub Admins | Password + MFA (Admin Login, dashboard-only) |
+| **Customer Website** | Web — Angular SSR/SSG | Guests + buyers | OTP for authenticated flows |
+| **Admin Panel** | Web SPA (Angular) | Super Admin, Hub Admins | Password + MFA (Admin Login, dashboard-only) |
 | **Employee App** | Android + iOS (Flutter) | Hub Employees (sales, drivers, technicians) | Password (Employee Login) |
 | **WebAPI** | ASP.NET Core (modular monolith) | All clients | JWT scoped by `accountType` + `allowedClients` + `hubIds` |
 | **Inspection App** *(external)* | Android (Kotlin) | Hub Employees (inspection technicians) | Employee Login token only |
@@ -137,9 +138,9 @@ flowchart TB
 | **Test Drive Booking** | **Concurrent-slot engine** — configurable capacity per slot |
 | Employee Operations | Lead management, conduct drives, OTP check-in |
 | Inspection App Integration | Webhook ingestion of PDF + structured JSON |
-| Notifications | Push, SMS, email |
+| Notifications | Push, SMS, email, WhatsApp |
 | Admin & Configuration | Hubs, slot capacity, RBAC, branding |
-| Reservation / Deal Handoff | Non-financial hold with TTL; single-winner per car |
+| Reservation / Deal Handoff | **Hub Admin-only** hold after offline token; configurable 15-day TTL; reserved car fully locked; single-winner per car |
 | Reporting & Analytics | Basic ops dashboards |
 
 ### Phase 2
@@ -149,7 +150,6 @@ flowchart TB
 | Reviews & Ratings | Post test-drive / deal feedback |
 | Inspection Services | **Sell request** + **PDI request** (user-initiated) |
 | Recommendations | Similar cars, price-drop alerts |
-| WhatsApp channel | Notification channel |
 | Promotions / Coupons | Marketing campaigns |
 
 ### Explicitly Out of Scope (MVP)
@@ -176,9 +176,9 @@ flowchart TB
 | Super Admin (`super_admin`) | Admin | Admin Portal | **All hubs** | One static/seeded login. Onboard hubs, hub admins, hub employees, consignors; dealer-wide settings; reassign Sell/PDI |
 | Hub Admin (`hub_admin`) | Admin | Admin Portal | Assigned hub(s) | Onboard hub employees + consignors; manage hub catalog, inventory, slots, leads, reservations |
 | Hub Employee (`hub_employee`) | Employee | Employee App, Inspection App | Assigned hub(s) | Sales, test drives, inspections for their hub |
-| User (`user`) | User | User App, Website | — | Interest, test drives, reservations, Sell/PDI — **never sees internal hub identity** |
+| User (`user`) | User | User App, Website | — | Interest, test drives, Sell/PDI — **sees hub info** (name/city + distance); **cannot self-reserve** |
 
-> **Multi-hub:** a car belongs to a hub; the hub that holds it (or is assigned a Sell/PDI request) owns all downstream activity. Buyers see only **city/area + distance** (exact address after a confirmed booking). Consignors are **scoped to one hub**, and a consigned car shares its consignor's hub.
+> **Multi-hub:** a car belongs to a hub; the hub that holds it (or is assigned a Sell/PDI request within **40 km**) owns all downstream activity. Buyers **see hub info** (name/address/city + distance); hub *scoping* restricts which staff can act on a hub. Consignors are **scoped to one hub**, and a consigned car shares its consignor's hub.
 
 ---
 
@@ -194,7 +194,7 @@ flowchart TB
 
 | Action | Rule | Mechanism |
 |--------|------|-----------|
-| **Reserve a car** | One winner at a time | Optimistic concurrency + hold TTL |
+| **Reserve a car** (Hub Admin only) | One winner at a time | Optimistic concurrency + configurable hold (default 15 days) |
 | **Sell a car** | One sale per VIN | Status transition to `Sold` |
 | **Test drive a car** | Many allowed, capped by slot capacity | Redis counter + DB conditional update |
 
@@ -213,9 +213,9 @@ Capacity = min(car availability, hub bays, available agents)
 
 | Layer | Choice |
 |-------|--------|
-| User + Employee Mobile | **Flutter** (or React Native) |
-| Website | **Next.js** (React, TypeScript, SSR/ISR) |
-| Admin Panel | **React SPA** + MUI / Ant Design |
+| User + Employee Mobile | **Flutter** |
+| Website | **Angular** (TypeScript, SSR/SSG) |
+| Admin Panel | **Angular SPA** |
 | Backend | **ASP.NET Core Web API** (modular monolith) |
 | Database | **PostgreSQL 15+** (FTS for search in MVP) |
 | Cache / Locks | **Redis** |
@@ -286,8 +286,7 @@ After that, every `git push` that touches `prototype/` triggers a new deploy.
 | **Discovery** | Home, Search, Filters, Car Detail |
 | **Auth** | Login (OTP), OTP Verification |
 | **Engagement** | Send Interest, Interest Success, EMI Calculator |
-| **Test Drives** | Book Test Drive, Booking Success, My Drives, Drive Detail, Reschedule |
-| **Reservations** | Reserve Success, My Reservations |
+| **Test Drives** | Book Test Drive (Hub / Doorstep ≤40 km), Booking Success, My Drives, Drive Detail, Reschedule |
 | **Inspection Services** | Services Hub, Sell Request, PDI Request, Request Tracker |
 | **Account** | Account, Profile, Settings, Saved Cars, Notifications |
 
@@ -320,7 +319,7 @@ After that, every `git push` that touches `prototype/` triggers a new deploy.
 | Leads / CRM | Kanban board with lead scoring |
 | Lead Detail | Activity timeline, disposition |
 | Test-Drive Config | Slot template, duration, capacity, doorstep toggle |
-| Reservations | Active holds, mark sold / release |
+| Reserved Vehicles | Hub Admin reserves after offline token; days-pending; mark sold / release; notify Employee App to follow up |
 | Hubs & Staff | Hubs (Super Admin onboards), bays, staff on shift |
 | Reports & Analytics | TD metrics, hub breakdown, staff conversion |
 | Users & RBAC | Staff accounts + role hierarchy (Super Admin / Hub Admin / Hub Employee), hub assignment |
@@ -339,9 +338,9 @@ After that, every `git push` that touches `prototype/` triggers a new deploy.
 | Drive Complete | Interest level, next action, notes |
 | Doorstep En Route | Map mock, ETA, navigate |
 | My Leads | Priority-sorted lead list |
-| Lead Detail | Timeline, status update, reserve CTA |
+| Lead Detail | Timeline, status update, log notes |
 | Hub Inventory | Per-car TD availability + capacity |
-| Reservations | Mark sold / release holds |
+| Reservation Follow-Up | View reservations flagged by Hub Admin; follow up on the final deal (read-only; Hub Admin marks sold / releases) |
 | Profile | Stats, availability toggle |
 
 **Recommended flow:** Schedule → Conduct Test Drive → OTP verify → Drive Complete.
@@ -367,7 +366,7 @@ AssureCars/
 │   ├── styles.css
 │   └── app.js
 ├── Docs/
-│   ├── Solution-Design-Document.md    ← Full HLD + LLD (v1.7)
+│   ├── Solution-Design-Document.md    ← Full HLD + LLD (v3.0)
 │   └── API-Documentation.md           ← REST API reference (v1)
 ├── database/
 │   └── migrations/
@@ -402,8 +401,8 @@ Requirements are scoped **through Phase 2 only**. Everything in scope is **non-f
 | Phase | Theme | Key Deliverables |
 |-------|-------|------------------|
 | **MVP-a — Get Online** | Foundation | Self-host packaging, auth, catalog, search, car detail, inspection PDF ingestion, website + user app browse, admin config |
-| **MVP-b — Capture Demand** | Core value | Interest/leads, **concurrent-slot test-drive booking**, employee app, non-financial reservations, notifications, basic dashboards |
-| **Phase 2 — Engage & Grow** | Trust + supply | Reviews, Sell + PDI inspection services, recommendations, WhatsApp, promotions, richer analytics |
+| **MVP-b — Capture Demand** | Core value | Interest/leads, **concurrent-slot test-drive booking** (Hub + Doorstep ≤40 km), employee app, **Hub Admin-only reservations** (offline token, 15-day hold), notifications (push/email/SMS/WhatsApp), basic dashboards |
+| **Phase 2 — Engage & Grow** | Trust + supply | Reviews, Sell + PDI inspection services, recommendations, promotions, richer analytics |
 
 ### Key Design Decisions
 
@@ -421,7 +420,7 @@ Requirements are scoped **through Phase 2 only**. Everything in scope is **non-f
 
 ## Getting Started (Development)
 
-This repository is currently in the **design & prototype phase**. Production application code for the AssureCars platform surfaces (Flutter apps, Next.js website, React admin, WebAPI) is planned per the Solution Design Document.
+This repository is currently in the **design & prototype phase**. Production application code for the AssureCars platform surfaces (Flutter apps, Angular website, Angular admin, WebAPI) is planned per the Solution Design Document.
 
 **What you can do today:**
 

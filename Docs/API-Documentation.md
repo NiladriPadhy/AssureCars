@@ -3,7 +3,7 @@
 **Product:** AssureCars — Premium Certified Used-Car Reseller Platform  
 **API Version:** v1  
 **Base URL:** `https://{dealer-domain}/api/v1`  
-**Status:** Draft — aligned with Solution Design Document v2.0  
+**Status:** Draft — aligned with Solution Design Document v3.0  
 **Last Updated:** 2026-07-18
 
 ---
@@ -88,7 +88,7 @@ AssureCars has **three login types** plus a **hub-scoped role hierarchy**. Each 
 
 **Inspection App:** Uses **Employee Login (`hub_employee`)** tokens only. The existing Inspection App login screen will be updated separately to authenticate against AssureCars IdP. **User Login and Admin tokens are never accepted.**
 
-**Guest (no login):** Public read-only APIs only — browse cars, CMS banners (never internal hub identity).
+**Guest (no login):** Public read-only APIs only — browse cars (incl. hub name/city + distance), CMS banners.
 
 #### API Access Matrix
 
@@ -589,35 +589,9 @@ Authorization: Bearer <access_token>
 
 ---
 
-### 3.4 My Reservations
+### 3.4 My Reservations — **Removed**
 
-```http
-GET /v1/me/reservations
-Authorization: Bearer <access_token>
-```
-
-**Response `200 OK`**
-
-```json
-{
-  "data": [
-    {
-      "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
-      "reservationNumber": "RSV-2026-000892",
-      "status": "Reserved",
-      "holdExpiresAt": "2026-07-13T10:00:00Z",
-      "car": {
-        "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
-        "title": "Toyota Fortuner 2.8 4x4 AT",
-        "listPrice": { "amountPaise": 387500000, "display": "₹38.75 L" }
-      },
-      "reservedAt": "2026-07-11T10:00:00Z"
-    }
-  ],
-  "meta": { "total": 1 },
-  "traceId": "00-..."
-}
-```
+> **Reservations are staff-only (Hub Admin).** Users cannot self-reserve, so there is no user-facing reservation list. A buyer is informed of a hold via notification (WhatsApp/SMS). Reservation management lives under Admin APIs — see §11.16.
 
 ---
 
@@ -759,6 +733,8 @@ GET /v1/cars/{carId}
 ```
 
 **Errors:** `404` (not found or not Live)
+
+> **EMI is indicative only.** `emiFrom` is a **display estimate** to aid discovery; the MVP is non-financial — there is **no financing/EMI application flow**.
 
 ---
 
@@ -1021,83 +997,15 @@ Idempotency-Key: 8d0f7780-8536-51ef-a55c-f18gd2g01bf8
 
 ---
 
-## 7. Reservations
+## 7. Reservations — **Staff-Only (Hub Admin)**
 
-### 7.1 Create Reservation (Non-Financial Hold)
-
-```http
-POST /v1/reservations
-Authorization: Bearer <access_token>
-Idempotency-Key: 9e1g8891-9647-62fg-b66d-g29he3h12cg9
-```
-
-**Request**
-
-```json
-{
-  "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
-  "notes": "Ready to visit hub this weekend"
-}
-```
-
-**Response `201 Created`**
-
-```json
-{
-  "data": {
-    "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
-    "reservationNumber": "RSV-2026-000892",
-    "status": "Reserved",
-    "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
-    "holdExpiresAt": "2026-07-13T10:00:00Z",
-    "message": "Car reserved. Our team will contact you to close the deal offline."
-  },
-  "traceId": "00-..."
-}
-```
-
-**Errors:** `409 Conflict` (car already reserved/sold)
-
-```json
-{
-  "type": "https://api.dealer.example/problems/car-unavailable",
-  "title": "Car no longer available",
-  "status": 409,
-  "detail": "This car was just reserved by another buyer.",
-  "traceId": "00-...",
-  "similarCars": ["c2...", "c3..."]
-}
-```
-
----
-
-### 7.2 Get Reservation
-
-```http
-GET /v1/reservations/{reservationId}
-Authorization: Bearer <access_token>
-```
-
-**Response `200 OK`**
-
-```json
-{
-  "data": {
-    "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
-    "reservationNumber": "RSV-2026-000892",
-    "status": "Reserved",
-    "car": {
-      "id": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
-      "title": "Toyota Fortuner 2.8 4x4 AT",
-      "listPrice": { "amountPaise": 387500000, "display": "₹38.75 L" }
-    },
-    "holdExpiresAt": "2026-07-13T10:00:00Z",
-    "reservedAt": "2026-07-11T10:00:00Z",
-    "rowVersion": 1
-  },
-  "traceId": "00-..."
-}
-```
+> **Reservations are created and managed only by a Hub Admin** (Super Admin superset), **after an offline token payment**. There is **no user-facing reservation endpoint** — the reserve action has been removed from the User App and Website. A **reserved car is fully locked** (its `interest`, `test-drive`, and `reservation` endpoints reject with `409`/`422` until it is Sold or released). See **§11.16 Reservations (Admin)** for the full contract:
+>
+> - `POST /v1/admin/reservations` — reserve a car (buyer via linked lead or manual name+phone; optional token flag/amount)
+> - `GET /v1/admin/reservations?status=&overdue=` — **Reserved Vehicles** worklist with `daysPending`
+> - `GET /v1/admin/reservations/{id}` — reservation detail
+> - `PATCH /v1/admin/reservations/{id}` — mark `Sold` / `Released` / notes
+> - `POST /v1/admin/reservations/{id}/notify-employee` — notify assigned Hub Employee to follow up
 
 ---
 
@@ -1217,7 +1125,9 @@ Idempotency-Key: a2h9902-a758-73gh-c77e-h30if4i23dh0
 }
 ```
 
-> Provide `latitude`/`longitude` (preferred) or at least `pincode` — the server routes the request to the customer's **nearest active hub** and returns it as `assignedHub`. The buyer is **never** shown the hub id/name; only the appointment address (after scheduling).
+> Provide `latitude`/`longitude` (preferred) or at least `pincode` — the server routes the request to the customer's **nearest active hub within 40 km** and returns it as `assignedHub` (name/area/city + distance). If no hub is within 40 km, `assignedHub` is `null` and the request awaits manual assignment by a Super Admin.
+>
+> **Sell money is offline (non-financial):** any `indicativeQuote` / `finalOffer` returned on a Sell request are **display-only reference values** — the platform performs no payment, payout, or settlement.
 
 **Request — PDI**
 
@@ -1255,13 +1165,13 @@ Idempotency-Key: a2h9902-a758-73gh-c77e-h30if4i23dh0
     },
     "message": "Request received. Pick an inspection slot to continue.",
     "nextAction": "schedule",
-    "assignedHub": { "area": "HSR Layout", "city": "Bengaluru", "distanceKm": 3.4 }
+    "assignedHub": { "name": "HSR Hub", "area": "HSR Layout", "city": "Bengaluru", "distanceKm": 3.4 }
   },
   "traceId": "00-..."
 }
 ```
 
-> `assignedHub` exposes only **area/city + distance** (never the internal hub id/name). If no hub is in range, `assignedHub` is `null` and the request awaits manual assignment by a Super Admin.
+> `assignedHub` includes the hub **name/area/city + distance**. If no hub is within **40 km**, `assignedHub` is `null` and the request awaits manual assignment by a Super Admin.
 
 ---
 
@@ -1329,7 +1239,7 @@ Authorization: Bearer <access_token>
 
 ## 10. Employee APIs
 
-> Requires `employee` role. Row-level scoping: executives see assigned leads; hub managers see hub scope.
+> Requires the **Hub Employee** role (`hub_employee`), **hub-scoped**: a Hub Employee sees leads/schedule/reservations only for their assigned hub(s).
 
 ### 10.1 List My Leads
 
@@ -1568,14 +1478,16 @@ Authorization: Bearer <access_token>
 
 ---
 
-### 10.8 List Active Reservations (Staff)
+### 10.8 Reservation Follow-Up (Hub Employee)
+
+> **Hub Employees do not create or close reservations** (that is **Hub Admin-only** — see §11.16). When a Hub Admin taps **"Notify Employee App"** on the Reserved Vehicles screen, the assigned Hub Employee receives a **follow-up task** for the final deal. Employees can view the reservation and log lead notes, but `Sold`/`Released` transitions are performed by the Hub Admin.
 
 ```http
 GET /v1/employee/reservations?status=Reserved
 Authorization: Bearer <access_token>
 ```
 
-**Response `200 OK`**
+**Response `200 OK`** — read-only worklist of reservations the employee has been asked to follow up (hub-scoped)
 
 ```json
 {
@@ -1584,47 +1496,14 @@ Authorization: Bearer <access_token>
       "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
       "reservationNumber": "RSV-2026-000892",
       "status": "Reserved",
-      "holdExpiresAt": "2026-07-13T10:00:00Z",
+      "holdExpiresAt": "2026-07-26T10:00:00Z",
+      "daysPending": 3,
       "buyer": { "fullName": "Rahul Sharma", "phone": "+919876543210" },
       "car": { "title": "Toyota Fortuner", "vin": "MA3EYD81S00123456" },
-      "rowVersion": 1
+      "followUpRequestedAt": "2026-07-13T09:00:00Z"
     }
   ],
-  "meta": { "total": 9 },
-  "traceId": "00-..."
-}
-```
-
----
-
-### 10.9 Update Reservation (Staff)
-
-```http
-PATCH /v1/reservations/{reservationId}
-Authorization: Bearer <access_token>
-If-Match: "1"
-```
-
-**Request — Mark Sold**
-
-```json
-{
-  "status": "Sold",
-  "notes": "Deal closed offline at Whitefield Hub"
-}
-```
-
-**Response `200 OK`**
-
-```json
-{
-  "data": {
-    "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
-    "status": "Sold",
-    "carStatus": "Sold",
-    "closedAt": "2026-07-12T16:00:00Z",
-    "rowVersion": 2
-  },
+  "meta": { "total": 4 },
   "traceId": "00-..."
 }
 ```
@@ -1633,7 +1512,7 @@ If-Match: "1"
 
 ## 11. Admin APIs
 
-> Requires `admin` role (catalog admin, hub manager, super admin per permission).
+> Requires an **Admin Login** — role `hub_admin` (hub-scoped) or `super_admin` (global). Admin Portal only.
 
 ### 11.1 List Cars (Admin)
 
@@ -1642,7 +1521,7 @@ GET /v1/admin/cars?hubId=h1a2b3c4-...&status=Live&listingSource=Owned&q=fortuner
 Authorization: Bearer <access_token>
 ```
 
-> **Hub scoping:** a `hub_admin` is automatically limited to their assigned hub(s) — an out-of-scope `hubId` returns `403`. A `super_admin` may pass any `hubId` or omit it to list across all hubs. `q` matches VIN/title. Hub is internal — buyer-facing car APIs never expose hub id/name.
+> **Hub scoping:** a `hub_admin` is automatically limited to their assigned hub(s) — an out-of-scope `hubId` returns `403`. A `super_admin` may pass any `hubId` or omit it to list across all hubs. `q` matches VIN/title. (Hub *scoping* controls staff access; hub **name/city is shown to buyers** on public car APIs.)
 
 **Response `200 OK`**
 
@@ -1954,7 +1833,7 @@ Accepts the same fields as create (e.g., `commissionPct`, `phone`, `address`). U
 
 ### 11.7 Hubs
 
-> **`POST /v1/admin/hubs` is `super_admin` only.** `hub_admin` may read hubs they are assigned to. Hubs are internal — buyer-facing APIs never return hub id/name/code.
+> **`POST /v1/admin/hubs` is `super_admin` only.** `hub_admin` may read hubs they are assigned to. (Hub name/address/city **is shown to buyers**; hub *scoping* restricts which staff can act on a hub.)
 
 ```http
 GET /v1/admin/hubs
@@ -2349,6 +2228,156 @@ Authorization: Bearer <access_token>
 ```json
 {
   "enabled": true
+}
+```
+
+---
+
+### 11.16 Reservations (Admin — Hub Admin only)
+
+> **Hub Admin-only** (Super Admin superset). A reservation is placed **after an offline token payment**; the buyer is identified by a **linked lead OR a manual name+phone**. A **reserved car is fully locked** — its `interest`, `test-drive`, and `reservation` endpoints reject until Sold/released. Hold defaults to **15 days** (`dealer_settings.reservation_hold_days`); if not marked `Sold` in time it is **auto-released**. All money is **offline** — `tokenAmountPaise` is display-only reference (no ledger).
+
+**Create Reservation**
+
+```http
+POST /v1/admin/reservations
+Authorization: Bearer <access_token>
+Idempotency-Key: 9e1g8891-9647-62fg-b66d-g29he3h12cg9
+```
+
+**Request — buyer via existing lead**
+
+```json
+{
+  "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "leadId": "l1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "tokenReceived": true,
+  "tokenAmountPaise": 2500000,
+  "notes": "Token collected at Whitefield Hub"
+}
+```
+
+**Request — walk-in buyer (manual)**
+
+```json
+{
+  "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "buyerName": "Rahul Sharma",
+  "buyerPhone": "+919876543210",
+  "tokenReceived": true,
+  "tokenAmountPaise": 2500000
+}
+```
+
+**Response `201 Created`**
+
+```json
+{
+  "data": {
+    "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "reservationNumber": "RSV-2026-000892",
+    "status": "Reserved",
+    "carId": "c1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "holdExpiresAt": "2026-07-26T10:00:00Z",
+    "holdDays": 15,
+    "tokenReceived": true,
+    "carStatus": "Reserved"
+  },
+  "traceId": "00-..."
+}
+```
+
+**Errors:** `409 Conflict` (car already reserved/sold), `422` (buyer not identified — needs `leadId` or `buyerName`+`buyerPhone`; or `tokenReceived=false`).
+
+**Reserved Vehicles worklist**
+
+```http
+GET /v1/admin/reservations?status=Reserved&overdue=false&hubId=h1a2b3c4-...
+Authorization: Bearer <access_token>
+```
+
+> Hub-scoped for `hub_admin`; `super_admin` sees all. `overdue=true` filters holds past their window pending release.
+
+**Response `200 OK`**
+
+```json
+{
+  "data": [
+    {
+      "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "reservationNumber": "RSV-2026-000892",
+      "status": "Reserved",
+      "buyer": { "name": "Rahul Sharma", "phone": "+919876543210" },
+      "car": { "title": "Toyota Fortuner", "vin": "MA3EYD81S00123456" },
+      "holdExpiresAt": "2026-07-26T10:00:00Z",
+      "daysPending": 3,
+      "notifiedEmployee": null,
+      "rowVersion": 1
+    }
+  ],
+  "meta": { "total": 9 },
+  "traceId": "00-..."
+}
+```
+
+**Update Reservation (mark Sold / Release)**
+
+```http
+PATCH /v1/admin/reservations/{reservationId}
+Authorization: Bearer <access_token>
+If-Match: "1"
+```
+
+**Request — Mark Sold**
+
+```json
+{
+  "status": "Sold",
+  "notes": "Deal closed offline at Whitefield Hub"
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "status": "Sold",
+    "carStatus": "Sold",
+    "closedAt": "2026-07-20T16:00:00Z",
+    "rowVersion": 2
+  },
+  "traceId": "00-..."
+}
+```
+
+**Notify Employee App (follow up on final deal)**
+
+```http
+POST /v1/admin/reservations/{reservationId}/notify-employee
+Authorization: Bearer <access_token>
+```
+
+**Request** *(optional; defaults to the lead's assigned Hub Employee, fallback hub pool)*
+
+```json
+{
+  "employeeId": "e1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "message": "Please close the deal — token already collected."
+}
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "data": {
+    "reservationId": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "notifiedEmployeeId": "e1a2b3c4-d5e6-7890-abcd-ef1234567890",
+    "notifiedAt": "2026-07-13T09:00:00Z"
+  },
+  "traceId": "00-..."
 }
 ```
 
@@ -2939,7 +2968,6 @@ All errors follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) `app
 | POST | `/v1/auth/logout` | User / Employee / Admin | MVP |
 | GET/PUT | `/v1/me` | User / Employee / Admin | MVP |
 | GET | `/v1/me/test-drives` | User | MVP |
-| GET | `/v1/me/reservations` | User | MVP |
 | GET | `/v1/me/inspection-requests` | User | Phase 2 |
 | GET | `/v1/cars` | Guest | MVP |
 | GET | `/v1/cars/{id}` | Guest | MVP |
@@ -2955,9 +2983,6 @@ All errors follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) `app
 | POST | `/v1/test-drives/{id}/reschedule` | User | MVP |
 | POST | `/v1/test-drives/{id}/checkin` | Employee | MVP |
 | POST | `/v1/test-drives/{id}/complete` | Employee | MVP |
-| POST | `/v1/reservations` | User | MVP |
-| GET | `/v1/reservations/{id}` | User / Employee | MVP |
-| PATCH | `/v1/reservations/{id}` | Employee | MVP |
 | POST | `/v1/inspection-requests` | User | Phase 2 |
 | GET | `/v1/inspection-requests/{id}` | User | Phase 2 |
 | POST | `/v1/reviews` | User | Phase 2 |
@@ -2968,7 +2993,7 @@ All errors follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) `app
 | PATCH | `/v1/employee/leads/{id}` | Employee | MVP |
 | POST | `/v1/employee/leads/{id}/notes` | Employee | MVP |
 | GET | `/v1/employee/schedule` | Employee | MVP |
-| GET | `/v1/employee/reservations` | Employee | MVP |
+| GET | `/v1/employee/reservations` | Employee (read-only follow-up) | MVP |
 | PATCH | `/v1/employee/inspection-requests/{id}` | Employee | Phase 2 |
 | GET/POST | `/v1/admin/cars` | Admin | MVP |
 | PATCH | `/v1/admin/cars/{id}` | Admin | MVP |
@@ -2989,6 +3014,11 @@ All errors follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) `app
 | GET/POST | `/v1/admin/users` | Admin (`super_admin`; `hub_admin` for `hub_employee` on own hub[s]) | MVP |
 | GET/PATCH | `/v1/admin/settings` | Admin (`super_admin` only) | MVP |
 | GET/PATCH | `/v1/admin/feature-flags` | Admin (`super_admin` only) | MVP |
+| POST | `/v1/admin/reservations` | Admin (`hub_admin`, hub-scoped) | MVP |
+| GET | `/v1/admin/reservations` | Admin (hub-scoped) | MVP |
+| GET | `/v1/admin/reservations/{id}` | Admin (hub-scoped) | MVP |
+| PATCH | `/v1/admin/reservations/{id}` | Admin (`hub_admin`) | MVP |
+| POST | `/v1/admin/reservations/{id}/notify-employee` | Admin (`hub_admin`) | MVP |
 | POST | `/v1/integrations/inspection/reports` | HMAC | MVP |
 | POST | `/v1/integrations/inspection/reports/{id}/pdf` | HMAC | MVP |
 
