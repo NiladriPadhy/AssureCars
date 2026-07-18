@@ -85,7 +85,7 @@ flowchart TB
   - **Owned** — dealer's own stock
   - **Consigned · Vendor** — another vendor's car on commission
   - **Consigned · Individual** — individual owner's car on commission
-- **Commission tracking is out of scope** — consignor contact is recorded; settlement stays offline.
+- **Commission rate is recorded per consignor at onboarding** (Vendor & Individual) for reference; **payout calculation & settlement stay offline** (out of scope).
 - **Inspection PDF is mandatory** for all sourcing types before a car goes Live.
 - **MVP is non-financial** — reservations are optimistic holds with TTL; payments/financing deferred to a future phase.
 
@@ -99,10 +99,10 @@ The interactive prototype models all four client surfaces plus the external insp
 |---------|----------|-------|------|
 | **User Mobile App** | Android + iOS (Flutter) | Buyers / sellers | OTP (User Login) |
 | **Customer Website** | Web — Next.js SSR | Guests + buyers | OTP for authenticated flows |
-| **Admin Panel** | Web SPA (React) | Catalog admins, hub managers, support | Password + MFA (Admin Login) |
-| **Employee App** | Android + iOS (Flutter) | Sales executives, test-drive agents | Password (Employee Login) |
-| **WebAPI** | ASP.NET Core (modular monolith) | All clients | JWT scoped by `accountType` + `allowedClients` |
-| **Inspection App** *(external)* | Android (Kotlin) | Inspection technicians | Employee or Admin Login token |
+| **Admin Panel** | Web SPA (React) | Super Admin, Hub Admins | Password + MFA (Admin Login, dashboard-only) |
+| **Employee App** | Android + iOS (Flutter) | Hub Employees (sales, drivers, technicians) | Password (Employee Login) |
+| **WebAPI** | ASP.NET Core (modular monolith) | All clients | JWT scoped by `accountType` + `allowedClients` + `hubIds` |
+| **Inspection App** *(external)* | Android (Kotlin) | Hub Employees (inspection technicians) | Employee Login token only |
 
 ```mermaid
 flowchart TB
@@ -155,7 +155,7 @@ flowchart TB
 ### Explicitly Out of Scope (MVP)
 
 - Online payments, deposits, EMI/financing, refunds
-- Commission tracking and settlement
+- Commission payout calculation & settlement (the agreed rate is recorded for reference)
 - Multi-tenant SaaS (single-tenant self-host instead)
 - C2C private listings / auctions
 
@@ -167,18 +167,18 @@ flowchart TB
 |------------|-------------|---------------------|
 | **User Login** | OTP (phone/email) | User App, Website |
 | **Employee Login** | Password (+ optional MFA) | Employee App, Inspection App |
-| **Admin Login** | Password + MFA (required) | Admin Portal, Employee App, Inspection App |
+| **Admin Login** | Password + MFA (required) | Admin Portal **only** (dashboard) |
 
-| Persona | Surface | Key Actions |
-|---------|---------|-------------|
-| Guest | Web, User App | Browse & search without login |
-| Registered User | Web, User App | Interest, test drives, reservations, Sell/PDI requests |
-| Sales Executive | Employee App | Manage leads, conduct test drives, close deals |
-| Test Drive Agent | Employee App | Doorstep drives, OTP verify, capture start/end |
-| Inspection Technician | Inspection App | Perform inspection, generate PDF |
-| Hub Manager | Employee App, Admin Portal | Hub inventory, staff, slot capacity |
-| Catalog Admin | Admin Portal | Listings, pricing, certification |
-| Super Admin | Admin Portal | RBAC, configuration, global settings |
+**Hub-scoped role hierarchy:**
+
+| Role | Login | Clients | Hub scope | Key actions |
+|------|-------|---------|-----------|-------------|
+| Super Admin (`super_admin`) | Admin | Admin Portal | **All hubs** | One static/seeded login. Onboard hubs, hub admins, hub employees, consignors; dealer-wide settings; reassign Sell/PDI |
+| Hub Admin (`hub_admin`) | Admin | Admin Portal | Assigned hub(s) | Onboard hub employees + consignors; manage hub catalog, inventory, slots, leads, reservations |
+| Hub Employee (`hub_employee`) | Employee | Employee App, Inspection App | Assigned hub(s) | Sales, test drives, inspections for their hub |
+| User (`user`) | User | User App, Website | — | Interest, test drives, reservations, Sell/PDI — **never sees internal hub identity** |
+
+> **Multi-hub:** a car belongs to a hub; the hub that holds it (or is assigned a Sell/PDI request) owns all downstream activity. Buyers see only **city/area + distance** (exact address after a confirmed booking). Consignors are **scoped to one hub**, and a consigned car shares its consignor's hub.
 
 ---
 
@@ -315,15 +315,15 @@ After that, every `git push` that touches `prototype/` triggers a new deploy.
 | Dashboard | KPIs, demand funnel, ops board |
 | Cars & Catalog | Inventory table with source + inspection status |
 | Add / Edit Car | Publish gate (VIN, report, price, photos) |
-| Consignors | Vendor / individual contact records |
+| Consignors | Vendor / individual records, scoped to a hub, with agreed commission % |
 | Inspections | Ingested reports, unmatched queue |
 | Leads / CRM | Kanban board with lead scoring |
 | Lead Detail | Activity timeline, disposition |
 | Test-Drive Config | Slot template, duration, capacity, doorstep toggle |
 | Reservations | Active holds, mark sold / release |
-| Hubs & Staff | Hub bays, staff on shift |
+| Hubs & Staff | Hubs (Super Admin onboards), bays, staff on shift |
 | Reports & Analytics | TD metrics, hub breakdown, staff conversion |
-| Users & RBAC | Staff accounts, role permissions matrix |
+| Users & RBAC | Staff accounts + role hierarchy (Super Admin / Hub Admin / Hub Employee), hub assignment |
 | Branding | Dealer name, colors, domain, provider keys |
 | Feature Flags | Phase-gated module toggles |
 

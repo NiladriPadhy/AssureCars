@@ -21,6 +21,10 @@
     { id: "c6", name: "Maruti Grand Vitara", variant: "Alpha+ Hybrid", year: 2023, km: "16,300", fuel: "Hybrid", trans: "e-CVT", owner: "1st", price: "18.60", emi: "34,600", grad: "g1", score: 93, grade: "A", hub: "Whitefield Hub", source: "Owned", color: "Midnight Black" }
   ];
   const carById = (id) => cars.find((c) => c.id === id) || cars[0];
+  // Buyers never see the internal hub id/name — only city/area + distance.
+  // (Exact hub address is revealed only after a booking is confirmed.)
+  const areaOf = (c) => ({ "Whitefield Hub": "Whitefield, Bengaluru", "Indiranagar Hub": "Indiranagar, Bengaluru", "Koramangala Hub": "Koramangala, Bengaluru" }[c.hub] || "Bengaluru");
+  const distOf = (c) => ({ "Whitefield Hub": "4 km", "Indiranagar Hub": "7 km", "Koramangala Hub": "9 km" }[c.hub] || "");
   let currentCarId = "c1";
 
   // ============================ Small helpers ============================
@@ -139,7 +143,7 @@
             </div>
             <span class="chip teal">Grade ${c.grade}</span>
           </div>
-          <div class="row gap8 mt12 wrap">${chip("✔ Certified", "green")}${chip("📍 " + c.hub)}${chip(c.owner + " owner")}</div>
+          <div class="row gap8 mt12 wrap">${chip("✔ Certified", "green")}${chip("📍 " + areaOf(c) + " · " + distOf(c))}${chip(c.owner + " owner")}</div>
 
           <div class="quick-row mt16">
             <button class="qbtn"><span class="qbi">♡</span>Save</button>
@@ -217,7 +221,7 @@
         <div class="pad">
           <div class="section-title mb12">1 · Choose mode</div>
           <div class="mode-toggle">
-            <div class="mode on"><div class="mt">🏢 At Hub</div><div class="ms">${c.hub}</div></div>
+            <div class="mode on"><div class="mt">🏢 At Hub</div><div class="ms">${areaOf(c)} · ${distOf(c)}</div></div>
             <div class="mode"><div class="mt">🚙 Doorstep</div><div class="ms">Driver brings car to you</div></div>
           </div>
 
@@ -232,7 +236,7 @@
         </div>
       </div>
       <div class="sticky-cta">
-        <div class="price"><span class="p">Wed, 16 · 09:20</span><span class="l">At ${c.hub}</span></div>
+        <div class="price"><span class="p">Wed, 16 · 09:20</span><span class="l">At hub · ${areaOf(c)}</span></div>
         <button class="btn btn-primary grow" data-go="app-book-success">Confirm Booking</button>
       </div>
     </div>`;
@@ -346,9 +350,10 @@
         <div class="field"><label>Request type</label><div class="seg"><button class="on">Sell my car</button><button>PDI (buying elsewhere)</button></div></div>
         <div class="field"><label>Car make & model</label><input class="input" placeholder="e.g. Hyundai i20 Asta" value="Volkswagen Polo GT" /></div>
         <div class="field"><label>Registration number</label><input class="input" value="KA-05-MJ-7788" /></div>
-        <div class="field"><label>Inspection location</label><input class="input" value="HSR Layout, Bengaluru" /></div>
+        <div class="field"><label>Pincode / location</label><input class="input" value="560102 · HSR Layout, Bengaluru" /></div>
         <div class="field"><label>Preferred date</label><input class="input" value="Sat, 19 Jul" /></div>
-        <div class="callout amber"><span class="ci">📅</span><div>We'll schedule a technician using the same slot engine and send you the report PDF when ready.</div></div>
+        <div class="callout info"><span class="ci">📍</span><div>Your request is routed to your <b>nearest hub</b>, which manages the inspection, offer and everything after. You won't need to pick a hub.</div></div>
+        <div class="callout amber mt12"><span class="ci">📅</span><div>We'll schedule a technician using the same slot engine and send you the report PDF when ready.</div></div>
       </div></div>
       <div class="sticky-cta"><button class="btn btn-primary btn-block" data-go="app-interest-success">Submit Request</button></div>
     </div>`;
@@ -552,6 +557,7 @@
       <div class="app-body" style="padding-top:12px"><div class="pad" style="display:flex;flex-direction:column;gap:14px">
         <div class="car-card" style="cursor:default"><div class="cc-body">
           <div class="row between"><div><b>Sell · VW Polo GT</b><div class="tiny muted mt8">#IR-771 · KA-05-MJ-7788</div></div><span class="chip teal">Report Ready</span></div>
+          <div class="tiny muted mt8">📍 Handled by your nearest hub · HSR / Koramangala, Bengaluru</div>
           <div class="timeline-mini mt12">
             <div class="tm-item done"><div class="tm-t">Requested</div></div>
             <div class="tm-item done"><div class="tm-t">Inspection scheduled · Sat 19 Jul</div></div>
@@ -562,7 +568,7 @@
         </div></div>
         <div class="car-card" style="cursor:default"><div class="cc-body">
           <div class="row between"><div><b>PDI · Maruti Swift (new)</b><div class="tiny muted mt8">#IR-802 · buying from another showroom</div></div><span class="chip amber">Scheduled</span></div>
-          <div class="tiny muted mt12">Inspection on Sun, 20 Jul · report delivered to you as PDF</div>
+          <div class="tiny muted mt12">📍 Nearest hub · Whitefield, Bengaluru · Inspection on Sun, 20 Jul · report delivered as PDF</div>
         </div></div>
       </div></div>
       ${tabbar("")}
@@ -576,9 +582,10 @@
         <div class="callout info mb16"><span class="ci">🔍</span><div>Get a car you're buying <b>elsewhere</b> inspected. We deliver a detailed PDF — the car doesn't enter our inventory.</div></div>
         <div class="field"><label>What are you buying?</label><div class="seg"><button class="on">New car</button><button>Used (another dealer)</button></div></div>
         <div class="field"><label>Car make & model</label><input class="input" value="Maruti Swift ZXi+" /></div>
-        <div class="field"><label>Showroom / seller location</label><input class="input" value="Nexa, Whitefield" /></div>
+        <div class="field"><label>Showroom / seller pincode & location</label><input class="input" value="560066 · Nexa, Whitefield" /></div>
         <div class="field"><label>Registration no. (if used)</label><input class="input" placeholder="Optional for new cars" /></div>
         <div class="field"><label>Preferred inspection date</label><input class="input" value="Sun, 20 Jul" /></div>
+        <div class="callout info mt8"><span class="ci">📍</span><div>We route your PDI to the <b>nearest hub</b> — its technician inspects the car and sends you the PDF.</div></div>
       </div></div>
       <div class="sticky-cta"><button class="btn btn-primary btn-block" data-go="app-interest-success">Submit PDI Request</button></div>
     </div>`;
@@ -781,7 +788,7 @@
               <div class="tiny muted mt8">60 months · 9.5% · 20% down</div>
             </div>
             <div class="panel mt16" style="border-radius:14px"><div class="panel-body">
-              <div class="row gap12"><div style="font-size:22px">📍</div><div><b>${c.hub}</b><div class="tiny muted">Available for doorstep test drive</div></div></div>
+              <div class="row gap12"><div style="font-size:22px">📍</div><div><b>${areaOf(c)}</b><div class="tiny muted">${distOf(c)} away · available for doorstep test drive</div></div></div>
             </div></div>
           </div>
         </div>
@@ -817,9 +824,10 @@
               <div class="field"><label>Year</label><select><option>2021</option><option>2022</option><option>2023</option></select></div>
               <div class="field"><label>Fuel</label><select><option>Petrol</option><option>Diesel</option></select></div>
               <div class="field"><label>KM driven</label><input class="input" value="32,000" /></div>
-              <div class="field"><label>RTO location</label><input class="input" value="KA-05" /></div>
+              <div class="field"><label>Pincode / location</label><input class="input" value="560102" /></div>
               <div class="field full"><label>Your mobile number</label><input class="input" value="+91 98450 12345" /></div>
             </div>
+            <div class="callout info mt12"><span class="ci">📍</span><div>We route your request to the <b>nearest hub</b> based on your location — that hub's team schedules the inspection and makes the offer.</div></div>
             <button class="btn btn-primary mt8" data-go="web-listing">Get instant quote →</button>
           </div>
           <div>
@@ -856,7 +864,7 @@
           ${[["Book online", "Tell us the car & location."], ["We inspect", "200-point check by a certified technician."], ["Get the PDF", "Detailed report with photos & grade."], ["Buy with confidence", "Negotiate armed with facts."]].map((s, i) => `<div class="step-card"><div class="num">${i + 1}</div><div style="font-weight:700;margin-bottom:6px">${s[0]}</div><div class="tiny muted">${s[1]}</div></div>`).join("")}
         </div>
         <h2 class="mt24 mb16" style="font-size:22px">FAQs</h2>
-        ${[["Does the car enter your inventory?", "No. A PDI car is third-party — you just receive the report."], ["New cars too?", "Yes — pre-delivery inspections for brand-new cars are supported."], ["How fast is the report?", "Usually within a few hours of inspection, delivered as a PDF."]].map(f => `<div class="faq-item"><div class="q">${f[0]}<span class="muted">＋</span></div><div class="a">${f[1]}</div></div>`).join("")}
+        ${[["Which location do you inspect from?", "We route your request to your nearest hub automatically — just give the car's pincode/location."], ["Does the car enter your inventory?", "No. A PDI car is third-party — you just receive the report."], ["New cars too?", "Yes — pre-delivery inspections for brand-new cars are supported."], ["How fast is the report?", "Usually within a few hours of inspection, delivered as a PDF."]].map(f => `<div class="faq-item"><div class="q">${f[0]}<span class="muted">＋</span></div><div class="a">${f[1]}</div></div>`).join("")}
       </div>
       ${webFooter()}
     </div>`;
@@ -902,8 +910,8 @@
         <div class="web-grid" style="grid-template-columns:1.3fr 1fr;gap:34px;margin-top:0">
           <div>
             <h2>Book a test drive</h2>
-            <p class="muted mb20">${c.name} · ${c.year} · ${c.hub}</p>
-            <div class="mode-toggle" style="max-width:420px"><div class="mode on"><div class="mt">🏢 At Hub</div><div class="ms">${c.hub}</div></div><div class="mode"><div class="mt">🚙 Doorstep</div><div class="ms">We bring the car to you</div></div></div>
+            <p class="muted mb20">${c.name} · ${c.year} · ${areaOf(c)}</p>
+            <div class="mode-toggle" style="max-width:420px"><div class="mode on"><div class="mt">🏢 At Hub</div><div class="ms">${areaOf(c)} · ${distOf(c)}</div></div><div class="mode"><div class="mt">🚙 Doorstep</div><div class="ms">We bring the car to you</div></div></div>
             <div class="section-title mt24 mb12">Pick a date</div>
             <div class="day-row">${days.map((d, i) => `<div class="day ${i === 2 ? "on" : ""}"><div class="dn">${d[0]}</div><div class="dd">${d[1]}</div></div>`).join("")}</div>
             <div class="section-title mt24 mb8">Pick a time slot</div>
@@ -966,11 +974,11 @@
         <div class="nav-item ${active === "branding" ? "active" : ""}" data-go="admin-branding"><span class="ni">🎨</span> Branding</div>
         <div class="nav-item ${active === "flags" ? "active" : ""}" data-go="admin-flags"><span class="ni">🚩</span> Feature Flags</div>
       </div>
-      <div class="side-foot"><div class="av">PA</div><div><div style="color:#fff;font-size:13px;font-weight:700">Priya Anand</div><div class="tiny">Catalog Admin</div></div></div>
+      <div class="side-foot"><div class="av">PA</div><div><div style="color:#fff;font-size:13px;font-weight:700">Priya Anand</div><div class="tiny">Super Admin · All hubs</div></div></div>
     </aside>`;
 
   const adminTop = (title) => `
-    <div class="admin-top"><h1>${title}</h1><div class="search2">🔍 Search cars, leads, VIN…</div><button class="btn btn-primary btn-sm" data-go="admin-carform">+ Add Car</button></div>`;
+    <div class="admin-top"><h1>${title}</h1><div class="search2">🔍 Search cars, leads, VIN…</div><span class="chip navy" style="margin-left:auto">Super Admin · All hubs</span><button class="btn btn-primary btn-sm" data-go="admin-carform">+ Add Car</button></div>`;
 
   const adminDash = () => `
     <div class="screen active" id="admin-dash" style="position:relative">
@@ -1019,15 +1027,19 @@
       <div class="admin">${adminSidebar("inv")}
         <div class="admin-main">${adminTop("Cars & Catalog")}
           <div class="admin-content">
-            <div class="pill-row mb16">${["All (142)", "Live (128)", "Reserved (9)", "Certified (3)", "In Inspection (5)", "Draft (7)"].map((p, i) => `<span class="chip ${i === 0 ? "navy" : "outline"}">${p}</span>`).join("")}</div>
+            <div class="row between mb16" style="align-items:flex-end;gap:12px">
+              <div class="pill-row">${["All (142)", "Live (128)", "Reserved (9)", "Certified (3)", "In Inspection (5)", "Draft (7)"].map((p, i) => `<span class="chip ${i === 0 ? "navy" : "outline"}">${p}</span>`).join("")}</div>
+              <div class="field" style="margin:0;min-width:200px"><label>Filter by hub</label><select><option>All hubs</option><option>Whitefield Hub</option><option>Indiranagar Hub</option><option>Koramangala Hub</option></select></div>
+            </div>
             <div class="panel">
               <div class="panel-head"><h3>Inventory</h3><div class="ph-right"><button class="btn btn-ghost btn-sm">⇪ Bulk import</button><button class="btn btn-primary btn-sm" data-go="admin-carform">+ Add Car</button></div></div>
               <table class="tbl">
-                <thead><tr><th>Vehicle</th><th>VIN</th><th>Source</th><th>Inspection</th><th>Price</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Vehicle</th><th>VIN</th><th>Hub</th><th>Source</th><th>Inspection</th><th>Price</th><th>Status</th><th></th></tr></thead>
                 <tbody>
                   ${invRows.map((r) => `<tr>
                     <td><div class="car-mini"><div class="car-img ${r.c.grad} thumb">${carSVG()}</div><div><b>${r.c.name}</b><div class="tiny muted">${r.c.year} · ${r.c.km} km</div></div></div></td>
                     <td class="tiny">MA3EYD…${r.c.id.slice(1)}456</td>
+                    <td class="tiny">${r.c.hub}</td>
                     <td>${srcChip(r.c.source)}</td>
                     <td>${r.st === "InInspection" ? chip("Pending", "outline") : chip("✔ " + r.c.grade + " · " + r.c.score, "green")}</td>
                     <td><b>₹${r.c.price}L</b></td>
@@ -1037,6 +1049,7 @@
                 </tbody>
               </table>
             </div>
+            <div class="callout info"><span class="ci">🏢</span><div><b>Hub scoping:</b> Super Admin sees & edits cars across <b>all hubs</b>; a Hub Admin sees only cars in <b>their assigned hub(s)</b>. Hub Employees can't edit the catalog.</div></div>
             <div class="callout amber"><span class="ci">🔒</span><div><b>Publish gate:</b> a car cannot go <b>Live</b> for any source (Owned or Consigned) without a passing ingested inspection report + a set price.</div></div>
           </div>
         </div>
@@ -1162,7 +1175,8 @@
                   <div class="callout amber mt12"><span class="ci">🔒</span><div>Mandatory for <b>all</b> sourcing — no car goes Live without a passing report + price.</div></div>
                 </div></div>
                 <div class="panel"><div class="panel-head"><h3>Consignor</h3><span class="chip outline" style="margin-left:auto">Owned · not required</span></div><div class="panel-body">
-                  <div class="tiny muted">Link a vendor/individual when the source is consigned. Recorded for reference only — <b>no commission tracking</b>.</div>
+                  <div class="field"><label>Link consignor (same hub only)</label><select><option>— Select a consignor in Whitefield Hub —</option><option>Sharma Motors (Vendor · 5.00%)</option><option>R. Iyer (Individual · 6.50%)</option></select></div>
+                  <div class="tiny muted">Only consignors onboarded for the car's <b>selected hub</b> appear here. The car inherits the consignor's agreed <b>commission %</b> for reference — <b>no payout calculation or settlement</b>.</div>
                 </div></div>
               </div>
             </div>
@@ -1176,11 +1190,26 @@
       <div class="admin">${adminSidebar("consignors")}
         <div class="admin-main">${adminTop("Consignors")}
           <div class="admin-content">
-            <div class="callout info mb16"><span class="ci">🏷️</span><div>Consignors own cars listed on commission. AssureCars records contact details for ops — it does <b>not</b> compute or settle commissions.</div></div>
+            <div class="callout info mb16"><span class="ci">🏷️</span><div>Consignors own cars listed on commission. Each consignor is onboarded <b>for one hub</b> by that hub's admin (or the Super Admin). AssureCars records contact details <b>and the agreed commission %</b> for ops/reference — it does <b>not</b> compute payouts or settle commissions (offline).</div></div>
+            <div class="panel mb16">
+              <div class="panel-head"><h3>Onboard consignor</h3></div>
+              <div class="panel-body">
+                <div class="form-grid">
+                  <div class="field"><label>Hub</label><select><option>Whitefield Hub</option><option>Indiranagar Hub</option><option>Koramangala Hub</option></select></div>
+                  <div class="field"><label>Type</label><div class="seg"><button class="on">Vendor</button><button>Individual</button></div></div>
+                  <div class="field"><label>Name</label><input class="input" placeholder="e.g. Speed Motors" /></div>
+                  <div class="field"><label>Contact number</label><input class="input" placeholder="+91 …" /></div>
+                  <div class="field"><label>Company <span class="tiny muted">(vendor)</span></label><input class="input" placeholder="e.g. Speed Motors LLP" /></div>
+                  <div class="field"><label>Commission %</label><input class="input" type="number" min="0" max="100" step="0.5" placeholder="e.g. 5" /></div>
+                </div>
+                <div class="tiny muted mt8">Consignor is bound to the selected hub; a consigned car must belong to the same hub. Commission % is the agreed rate for <b>both Vendor and Individual</b> consignors — recorded for reference only.</div>
+                <div class="row gap8 mt12"><button class="btn btn-primary btn-sm">Save consignor</button><button class="btn btn-ghost btn-sm">Cancel</button></div>
+              </div>
+            </div>
             <div class="panel">
               <div class="panel-head"><h3>Consignor records</h3><button class="btn btn-primary btn-sm" style="margin-left:auto">+ Add Consignor</button></div>
-              <table class="tbl"><thead><tr><th>Name</th><th>Type</th><th>Contact</th><th>Company</th><th>Cars listed</th><th></th></tr></thead><tbody>
-                ${[["Speed Motors", "Vendor", "+91 90000 11111", "Speed Motors LLP", "6"], ["Ramesh Kumar", "Individual", "+91 98111 22222", "—", "1"], ["Auto Bazaar", "Vendor", "+91 93333 44444", "Auto Bazaar Pvt", "3"]].map(r => `<tr><td><b>${r[0]}</b></td><td>${r[1] === "Vendor" ? chip("Vendor", "amber") : chip("Individual", "teal")}</td><td class="tiny">${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td><button class="btn btn-ghost btn-sm">Edit</button></td></tr>`).join("")}
+              <table class="tbl"><thead><tr><th>Name</th><th>Hub</th><th>Type</th><th>Contact</th><th>Company</th><th>Commission</th><th>Cars listed</th><th></th></tr></thead><tbody>
+                ${[["Speed Motors", "Whitefield Hub", "Vendor", "+91 90000 11111", "Speed Motors LLP", "5.0%", "6"], ["Ramesh Kumar", "Indiranagar Hub", "Individual", "+91 98111 22222", "—", "4.5%", "1"], ["Auto Bazaar", "Koramangala Hub", "Vendor", "+91 93333 44444", "Auto Bazaar Pvt", "6.0%", "3"]].map(r => `<tr><td><b>${r[0]}</b></td><td class="tiny">${r[1]}</td><td>${r[2] === "Vendor" ? chip("Vendor", "amber") : chip("Individual", "teal")}</td><td class="tiny">${r[3]}</td><td>${r[4]}</td><td><b>${r[5]}</b></td><td>${r[6]}</td><td><button class="btn btn-ghost btn-sm">Edit</button></td></tr>`).join("")}
               </tbody></table>
             </div>
           </div>
@@ -1290,14 +1319,15 @@
       <div class="admin">${adminSidebar("users")}
         <div class="admin-main">${adminTop("Users & RBAC")}
           <div class="admin-content">
+            <div class="callout info mb16"><span class="ci">🔐</span><div><b>Role hierarchy:</b> Super Admin (all hubs, dashboard-only) onboards Hubs, Hub Admins & Hub Employees. Hub Admin (dashboard-only, their hub) onboards Hub Employees & consignors. Hub Employees use the Employee App + Inspection App. Admin logins never open the Employee/Inspection apps.</div></div>
             <div class="panel"><div class="panel-head"><h3>Staff accounts</h3><button class="btn btn-primary btn-sm" style="margin-left:auto">+ Invite user</button></div>
-              <table class="tbl"><thead><tr><th>User</th><th>Role</th><th>Hub</th><th>MFA</th><th>Status</th><th></th></tr></thead><tbody>
-                ${[["Priya Anand", "Super Admin", "All", "on", "Active"], ["Rahul Sharma", "Sales Executive", "Whitefield", "off", "Active"], ["Arjun P.", "Test-Drive Agent", "Whitefield", "off", "Active"], ["Sana K.", "Hub Manager", "Koramangala", "on", "Active"]].map(u => `<tr><td class="car-mini"><div class="avatar-xs">${u[0][0]}</div><b>${u[0]}</b></td><td>${chip(u[1], u[1].includes("Admin") ? "navy" : "outline")}</td><td>${u[2]}</td><td>${u[3] === "on" ? chip("MFA on", "green") : chip("No MFA", "outline")}</td><td><span class="status-dot" style="color:var(--emerald-500)">${u[4]}</span></td><td><button class="btn btn-ghost btn-sm">Edit</button></td></tr>`).join("")}
+              <table class="tbl"><thead><tr><th>User</th><th>Role</th><th>Hub(s)</th><th>Clients</th><th>MFA</th><th>Status</th><th></th></tr></thead><tbody>
+                ${[["Priya Anand", "Super Admin", "All hubs", "Admin Portal", "on", "Active"], ["Sana K.", "Hub Admin", "Koramangala", "Admin Portal", "on", "Active"], ["Rahul Sharma", "Hub Employee", "Whitefield", "Employee + Inspection", "off", "Active"], ["Arjun P.", "Hub Employee", "Whitefield", "Employee + Inspection", "off", "Active"]].map(u => `<tr><td class="car-mini"><div class="avatar-xs">${u[0][0]}</div><b>${u[0]}</b></td><td>${chip(u[1], u[1].includes("Admin") ? "navy" : "teal")}</td><td>${u[2]}</td><td class="tiny">${u[3]}</td><td>${u[4] === "on" ? chip("MFA on", "green") : chip("No MFA", "outline")}</td><td><span class="status-dot" style="color:var(--emerald-500)">${u[5]}</span></td><td><button class="btn btn-ghost btn-sm">Edit</button></td></tr>`).join("")}
               </tbody></table>
             </div>
             <div class="panel"><div class="panel-head"><h3>Role permissions</h3></div><div class="panel-body">
-              <table class="tbl"><thead><tr><th>Capability</th><th>Admin</th><th>Hub Mgr</th><th>Sales</th><th>Agent</th></tr></thead><tbody>
-                ${[["Manage catalog", "✓", "✓", "—", "—"], ["Set pricing", "✓", "—", "—", "—"], ["View all leads", "✓", "✓ (hub)", "own", "—"], ["Conduct test drive", "✓", "✓", "✓", "✓"], ["Manage users", "✓", "—", "—", "—"]].map(r => `<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td></tr>`).join("")}
+              <table class="tbl"><thead><tr><th>Capability</th><th>Super Admin</th><th>Hub Admin</th><th>Hub Employee</th></tr></thead><tbody>
+                ${[["Onboard hubs", "✓", "—", "—"], ["Onboard hub admins", "✓", "—", "—"], ["Onboard hub employees", "✓", "✓ (own hub)", "—"], ["Onboard consignors", "✓", "✓ (own hub)", "—"], ["Manage catalog & pricing", "✓ (all)", "✓ (own hub)", "—"], ["Conduct test drive / inspection", "—", "—", "✓ (own hub)"], ["Reassign Sell/PDI hub", "✓", "—", "—"]].map(r => `<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join("")}
               </tbody></table>
             </div></div>
           </div>
@@ -1457,14 +1487,14 @@
       ${statusbar()}
       <div class="login-wrap" style="background:var(--navy-900)">
         <div class="login-logo">◆</div>
-        <h1 style="font-size:24px;margin-top:24px;color:#fff">AssureCars<br>Staff</h1>
-        <p style="color:var(--ink-300);margin-top:8px">Sign in to manage leads, drives and inventory.</p>
+        <h1 style="font-size:24px;margin-top:24px;color:#fff">AssureCars<br>Hub Employee</h1>
+        <p style="color:var(--ink-300);margin-top:8px">Sign in to run leads, drives and inspections for your hub.</p>
         <div class="mt24">
           <div class="field"><label style="color:var(--ink-300)">Work email</label><input class="input" value="rahul@premiumcars.com" /></div>
           <div class="field"><label style="color:var(--ink-300)">Password</label><input class="input" type="password" value="········" /></div>
         </div>
         <button class="btn btn-primary btn-block" data-go="emp-sched">Sign in</button>
-        <div class="callout info mt16"><span class="ci">🔐</span><div>Admins use step-up MFA. Role & permission claims scope what you can see.</div></div>
+        <div class="callout info mt16"><span class="ci">🔐</span><div>Hub Employee logins open the <b>Employee App + Inspection App</b>, scoped to your assigned hub(s). Super/Hub Admins sign in on the <b>Admin Portal</b> — never here.</div></div>
       </div>
     </div>`;
 

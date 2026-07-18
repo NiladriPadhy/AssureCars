@@ -3,7 +3,7 @@
 **Product:** AssureCars — Premium Certified Used-Car Reseller Platform
 **Business Inspiration:** [Cars24](https://www.cars24.com/), [Spinny](https://www.spinny.com/)
 **Document Type:** Solution / High-Level & Low-Level Design (HLD + LLD)
-**Version:** 1.8
+**Version:** 2.0
 **Status:** Draft for Review
 
 ---
@@ -15,7 +15,7 @@
 | Author | Solution Architecture Team |
 | Reviewers | Product, Engineering, Security, DevOps, Business |
 | Audience | Engineering, QA, DevOps, Product, Business Stakeholders |
-| Last Updated | 2026-07-17 (complete inspection-data capture v1.8) |
+| Last Updated | 2026-07-18 (hub role hierarchy & hub scoping v2.0) |
 
 ### 1.1 Revision History
 
@@ -31,6 +31,8 @@
 | 1.6 | 2026-07-11 | Architecture | Full PostgreSQL schema (DDL) for prototype baseline; Inspection App JSON contract confirmed; normalized inspection report tables + PDF storage |
 | 1.7 | 2026-07-11 | Architecture | Three login types (User / Employee / Admin) with client-access matrix; User→User App+Website; Employee→Employee App+Inspection App; Admin→Admin Portal+Employee App+Inspection App |
 | 1.8 | 2026-07-17 | Architecture | **Complete inspection-data capture** — persist the full inspection graph (per-photo images + metadata, manual annotations, AI findings, full checklist responses, damage assessments, scores, integrity signals) as first-class tables alongside the PDF, not just `raw_payload`; **every inspection keyed to a VIN**; formalized **"list a car by VIN → auto-map inspection"** admin flow with bidirectional correlation (migration `002_inspection_complete_data.sql`) |
+| 1.9 | 2026-07-18 | Architecture | **Consignor onboarding + commission-rate capture** — Admin sets an agreed **commission % on the Consignor at onboarding** (both Vendor & Individual) as non-financial reference data; consigned cars inherit the rate for display; commission **payout calculation/settlement stays offline (out of scope)**; added `consignors.commission_pct` (migration `003_consignor_commission.sql`); documented E2E Consignor & consigned-vehicle onboarding workflow |
+| 2.0 | 2026-07-18 | Architecture | **Hub role hierarchy & hub scoping** — introduced `super_admin` (global) / `hub_admin` (hub-scoped) / `hub_employee` (hub-scoped) / `user`; **Admin Login is now Admin Portal only** (dashboard); the **Inspection App is opened by Hub Employee tokens only**; **Consignors scoped to one hub** and a consigned car must share its consignor's hub; **Sell/PDI routed to the customer's nearest hub** (GPS/pincode) which then owns the activity; **buyers never see internal hub identity** (city/area + distance only; exact address post-booking); Super Admin onboards hubs/hub-admins, Hub Admin onboards hub-employees/consignors; migration `004_hub_roles_and_scoping.sql` |
 
 ---
 
@@ -68,7 +70,7 @@ Additionally, AssureCars **integrates with an existing external Inspection Mobil
 - **Each dealer's instance is independent** (single-tenant, self-hosted): their own inventory, branding, staff, customers, and data. There is no cross-dealer data sharing.
 - Within a dealer's instance, each car is **unique inventory** (a specific VIN), not a generic SKU — a car can be sold only once.
 - A dealer can list cars from **three sources**: **(1) their own pre-owned stock (Owned)**, **(2) another vendor's cars on commission (Consigned — Vendor)**, and **(3) an individual owner's car on commission (Consigned — Individual)**. All three appear as normal listings to buyers; the source is captured for the dealer's operational reference.
-- **Commission tracking/settlement via the app is OUT of scope.** The platform records *who the car belongs to* (the consignor) for ops/display, but does **not** compute, track, or settle commissions — that stays with the dealer's offline process.
+- **Commission-rate capture is IN scope; payout/settlement is OUT.** At consignor onboarding the Admin records *who the car belongs to* (the consignor) **and the agreed commission %** (for both Vendor and Individual consignors) for ops/display. The platform stores the rate for reference but does **not** compute payouts, track balances, or settle commissions — that stays with the dealer's offline process.
 - **Inspection Report PDF is mandatory for all sourcing** — no car (Owned or Consigned) is published Live without an ingested, passing inspection report.
 - **User-initiated inspection services:** from the End-User App and Website a user can submit a **Sell request** (sell their car to the dealer) or a **PDI request** (get a car they're buying elsewhere inspected). Both use the **existing Inspection App** and produce the PDF.
 - **Product monetization** (for the AssureCars vendor): license / subscription per dealer, tiered by features/hubs; paid add-on modules (e.g., the future payments/financing pack). *This is separate from the dealer's own revenue.*
@@ -96,7 +98,7 @@ Additionally, AssureCars **integrates with an existing external Inspection Mobil
 ### 3.3 Non-Goals (MVP)
 
 - **Any financial workflow** — online payments, token/deposit, EMI/financing, refunds, invoicing, ledgers. *(Deferred to a later phase — see §16.)*
-- **Commission tracking/settlement** for consigned (vendor/individual) cars — the app records the source/consignor but does **not** calculate or settle commissions.
+- **Commission payout/settlement** for consigned (vendor/individual) cars — the app records the source/consignor **and the agreed commission rate (%)** for reference, but does **not** calculate payouts, track balances, or settle commissions.
 - Multi-tenant SaaS (each dealer is a separate self-hosted instance instead).
 - Peer-to-peer (C2C) private listings; auction/bidding engine.
 - International / multi-currency operations.
@@ -105,15 +107,28 @@ Additionally, AssureCars **integrates with an existing external Inspection Mobil
 
 ## 4. Personas & Actors
 
-### 4.1 Login Types & Client Access
+### 4.1 Login Types, Roles & Client Access
 
-AssureCars has **three distinct login types**. Each login issues JWTs scoped to specific **client applications**. The API gateway rejects tokens presented to a client they were not issued for.
+AssureCars has **three login types** and a **hub-centric role hierarchy** on top of them. Each login issues JWTs scoped to specific **client applications** (`allowedClients`); staff authority is further scoped to **hub(s)** by role. The API gateway rejects tokens presented to a client they were not issued for, and the service layer enforces hub scoping.
 
 | Login type | Auth method | Client applications granted | API access |
 |------------|-------------|----------------------------|------------|
 | **User Login** | OTP (phone/email) | **User App**, **Website** | Public/catalog APIs + user-scoped APIs (`/v1/me`, interest, test drives, reservations, inspection requests) |
 | **Employee Login** | Password (+ MFA optional) | **Employee App**, **Inspection App** | Employee-scoped APIs (`/v1/employee/*`) + shared read APIs; Inspection App uses the **same Employee token** *(Inspection App login UI is existing — updated separately to accept AssureCars-issued Employee tokens)* |
-| **Admin Login** | Password + MFA (required) | **Admin Portal**, **Employee App**, **Inspection App** | All Admin APIs (`/v1/admin/*`) **plus** everything Employee Login can access |
+| **Admin Login** | Password + MFA (required) | **Admin Portal only** | All Admin APIs (`/v1/admin/*`), hub-scoped by role |
+
+**Role hierarchy** (roles live in `roles` + `user_roles`; hub links in `employee_hubs`):
+
+| Role | Login type | Clients (`allowedClients`) | Hub scope | Responsibilities |
+|------|-----------|----------------------------|-----------|------------------|
+| **Super Admin** (`super_admin`) | Admin | `AdminPortal` | **All hubs (global)** | One seeded/static login. Onboards **Hubs**, **Hub Admins**, **Hub Employees**, and **Consignors**; owns dealer-wide settings; can act on any hub and reassign Sell/PDI requests. |
+| **Hub Admin** (`hub_admin`) | Admin | `AdminPortal` | **Assigned hub(s)** | Onboards **Hub Employees** and **Consignors** for their hub(s); manages their hub's catalog, inventory, slot config, leads, reservations. |
+| **Hub Employee** (`hub_employee`) | Employee | `EmployeeApp`, `InspectionApp` | **Assigned hub(s)** | Runs sales, test-drive, and **inspection** operations for their hub(s). Only staff role that opens the Inspection App. |
+| **User** (`user`) | User | `UserApp`, `Website` | — | Buyer/seller. **Never sees internal hub identity.** |
+
+- **Admin Login is dashboard-only** — `super_admin` and `hub_admin` tokens grant **Admin Portal**, never Employee App or Inspection App.
+- **Inspection App is opened by Hub Employee tokens only** (`X-Client-Id: InspectionApp`).
+- **Who onboards whom:** Super Admin → Hubs + Hub Admins + Hub Employees + Consignors; Hub Admin → Hub Employees + Consignors (for their hub[s]).
 
 ```mermaid
 flowchart LR
@@ -121,14 +136,12 @@ flowchart LR
         UA[User App]
         WEB[Website]
     end
-    subgraph EmployeeLogin[Employee Login - Password]
+    subgraph EmployeeLogin[Employee Login - Password<br/>role: hub_employee]
         EA[Employee App]
         INSP_E[Inspection App]
     end
-    subgraph AdminLogin[Admin Login - Password + MFA]
+    subgraph AdminLogin[Admin Login - Password + MFA<br/>roles: super_admin / hub_admin]
         ADM[Admin Portal]
-        EA2[Employee App]
-        INSP_A[Inspection App]
     end
     IDP[(AssureCars IdP / WebAPI Auth)]
     UserLogin --> IDP
@@ -136,26 +149,27 @@ flowchart LR
     AdminLogin --> IDP
     IDP -->|accountType=User| UA & WEB
     IDP -->|accountType=Employee| EA & INSP_E
-    IDP -->|accountType=Admin| ADM & EA2 & INSP_A
+    IDP -->|accountType=Admin| ADM
 ```
 
-> **Inspection App note:** AssureCars does **not** rebuild the Inspection App. Its **existing login screen** will be updated (by the Inspection App team) to authenticate against the AssureCars IdP using **Employee Login** or **Admin Login** tokens. User Login tokens are **never** accepted by the Inspection App.
+> **Inspection App note:** AssureCars does **not** rebuild the Inspection App. Its **existing login screen** will be updated (by the Inspection App team) to authenticate against the AssureCars IdP using **Hub Employee (Employee Login)** tokens. User Login and Admin (dashboard) tokens are **never** accepted by the Inspection App.
+
+> **Hub scoping:** `hub_admin` and `hub_employee` may read/act only within their assigned hub(s) (`employee_hubs`, many-to-many; `is_primary` marks the home hub). `super_admin` has no hub links and is treated as global. Every hub-owned query (inventory, leads, test drives, reservations, inspections) is filtered by the caller's hub scope.
 
 ### 4.2 Personas
 
-| Actor | Login type | Surface | Responsibilities |
-|-------|------------|---------|------------------|
-| **Guest** | *(none)* | Web, User App | Browse & search without login |
-| **Registered User (buyer/seller)** | **User Login** | Web, User App | Interest, test drives, reservations, Sell/PDI requests *(purchase/financing: future scope)* |
-| **Sales Executive** | **Employee Login** | Employee App | Own leads, run test drives, close deals |
-| **Test Drive Agent / Driver** | **Employee Login** | Employee App | Deliver doorstep test drives, capture start/end, OTP verify |
-| **Inspection Technician** | **Employee Login** | **Inspection App (external)** | Perform inspection & generate PDF in the existing Inspection Mobile App |
-| **Hub Manager** | **Employee Login** or **Admin Login** | Employee App, Admin Portal | Manage hub inventory, staff, slot capacity |
-| **Catalog / Pricing Admin** | **Admin Login** | Admin Portal | Manage listings, pricing, certification |
-| **Marketing Admin** | **Admin Login** | Admin Portal | Banners, promotions, coupons, CMS |
-| **Super Admin** | **Admin Login** | Admin Portal | RBAC, configuration, global settings |
-| **Support Agent** | **Admin Login** | Admin Portal | Handle tickets, reschedule, refunds |
-| **System (schedulers/jobs)** | Service account | Backend | Reminders, slot expiry, lead SLA, reconciliation |
+| Actor | Login type / Role | Surface | Hub scope | Responsibilities |
+|-------|-------------------|---------|-----------|------------------|
+| **Guest** | *(none)* | Web, User App | — | Browse & search without login; never sees hub identity |
+| **Registered User (buyer/seller)** | **User Login** (`user`) | Web, User App | — | Interest, test drives, reservations, Sell/PDI requests *(purchase/financing: future scope)* |
+| **Hub Employee — Sales** | **Employee Login** (`hub_employee`) | Employee App | Assigned hub(s) | Own leads, run test drives, close deals for their hub |
+| **Hub Employee — Test-Drive Agent / Driver** | **Employee Login** (`hub_employee`) | Employee App | Assigned hub(s) | Deliver doorstep test drives, capture start/end, OTP verify |
+| **Hub Employee — Inspection Technician** | **Employee Login** (`hub_employee`) | **Inspection App (external)** | Assigned hub(s) | Perform inspection & generate PDF in the existing Inspection Mobile App |
+| **Hub Admin** | **Admin Login** (`hub_admin`) | Admin Portal | Assigned hub(s) | Onboard hub employees + consignors; manage hub catalog, inventory, slot capacity, leads, reservations |
+| **Super Admin** | **Admin Login** (`super_admin`) | Admin Portal | **All hubs** | Onboard hubs, hub admins, hub employees, consignors; RBAC; dealer-wide settings; reassign Sell/PDI |
+| **System (schedulers/jobs)** | Service account | Backend | — | Reminders, slot expiry, lead SLA, reconciliation, nearest-hub routing |
+
+> **Job functions vs. role:** Sales, Driver, and Inspection Technician are **designations/permissions within the single `hub_employee` role**, not separate login types. Catalog/pricing, marketing/CMS, and support duties are **permissions granted to `hub_admin`/`super_admin`** on the Admin Portal.
 
 ---
 
@@ -166,11 +180,11 @@ flowchart LR
 | App | Platform | Framework (Recommended) | Primary Users |
 |-----|----------|-------------------------|---------------|
 | End-User Mobile App | Android + iOS | **Flutter** (or React Native) | Registered users | **User Login** (OTP) |
-| Dealership Employee App | Android + iOS | **Flutter** (or React Native) | Sales, Drivers, Hub Managers | **Employee Login** or **Admin Login** |
+| Dealership Employee App | Android + iOS | **Flutter** (or React Native) | Hub Employees (Sales, Drivers, Technicians) | **Employee Login** (`hub_employee`) |
 | Customer Website | Web (responsive/SSR) | **Next.js (React)** | Registered users, guests | **User Login** (OTP) for authenticated flows |
-| Admin Panel | Web (SPA) | **React + Ant Design / MUI** | Admins, Support | **Admin Login** (password + MFA) |
-| WebAPI | Backend | **.NET (ASP.NET Core Web API)** or **Node/NestJS** | All clients | Validates JWT `accountType` + `allowedClients` |
-| **Inspection Mobile App** *(existing / external)* | Android + iOS | *Pre-built — not rebuilt by AssureCars* | Inspection Technicians | **Employee Login** or **Admin Login** *(existing app login updated to federate with AssureCars IdP)* |
+| Admin Panel | Web (SPA) | **React + Ant Design / MUI** | Super Admin, Hub Admins | **Admin Login** (password + MFA) |
+| WebAPI | Backend | **.NET (ASP.NET Core Web API)** or **Node/NestJS** | All clients | Validates JWT `accountType` + `allowedClients` + hub scope |
+| **Inspection Mobile App** *(existing / external)* | Android + iOS | *Pre-built — not rebuilt by AssureCars* | Hub Employees (Inspection Technicians) | **Employee Login** *(existing app login updated to federate with AssureCars IdP)* |
 
 > Cross-platform choice rationale in §8.
 
@@ -182,7 +196,7 @@ Modules are tagged by phase. **MVP is deliberately non-financial.** Everything m
 
 | # | Module | Phase | Notes |
 |---|--------|-------|-------|
-| 1 | Identity, Auth & Profile | **MVP** | **Three login types:** User (OTP), Employee (password), Admin (password+MFA); client-scoped JWTs; RBAC for staff |
+| 1 | Identity, Auth & Profile | **MVP** | **Three login types** (User OTP, Employee password, Admin password+MFA) + **hub-scoped role hierarchy** (super_admin / hub_admin / hub_employee / user); client-scoped JWTs; RBAC + hub scoping for staff |
 | 2 | Car Catalog & Inventory | **MVP** | Unique-VIN inventory, publish/delist |
 | 3 | Search, Filter & Discovery | **MVP** | Faceted search over dealer inventory |
 | 4 | Vehicle Detail & Inspection Report | **MVP** | Shows ingested PDF report |
@@ -287,7 +301,7 @@ flowchart TB
 
 A defining constraint of AssureCars (vs. a generic e-commerce catalog): **each vehicle is a single, unique unit (one VIN = quantity 1)** within a dealer's instance.
 
-- Every car carries a **listing source**: `Owned`, `ConsignedVendor`, or `ConsignedIndividual`. Consigned cars link to a **Consignor** record (the owning vendor/individual) for operational reference only — **no commission math** (out of scope).
+- Every car carries a **listing source**: `Owned`, `ConsignedVendor`, or `ConsignedIndividual`. Consigned cars link to a **Consignor** record (the owning vendor/individual) that carries the **agreed commission %** captured at onboarding, for operational reference/display — the platform stores the rate but performs **no payout calculation or settlement** (offline).
 - A car can transition: `Draft → In-Inspection → Certified → Live → Reserved → Sold`.
 - Only **one deal** can ultimately claim a given car. **In the MVP this is a non-financial reservation** — a staff member (or the system on buyer request) marks the car `Reserved`, then the dealer closes the deal offline and marks it `Sold`. **No payment is involved.** (Online purchase with payment is future scope.)
 - **Test drives are NOT purchases** → many people can test-drive the same car over time; concurrency here is about *scheduling capacity*, not exclusive ownership (see §10.6).
@@ -603,7 +617,7 @@ CREATE TABLE users (
 
 CREATE TABLE roles (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code        VARCHAR(50) NOT NULL UNIQUE,  -- e.g. sales_executive, hub_manager, super_admin
+  code        VARCHAR(50) NOT NULL UNIQUE,  -- canonical: super_admin, hub_admin, hub_employee (seeded by 004)
   name        VARCHAR(100) NOT NULL,
   description TEXT
 );
@@ -757,17 +771,24 @@ CREATE TABLE hub_slot_templates (
 -- -------------------- CONSIGNORS --------------------
 
 CREATE TABLE consignors (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  type        consignor_type NOT NULL,
-  name        VARCHAR(200) NOT NULL,
-  phone       VARCHAR(20),
-  email       CITEXT,
-  company     VARCHAR(200),
-  address     TEXT,
-  notes       TEXT,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- Each consignor is onboarded for exactly ONE hub (migration 004).
+  -- A consigned car must share its consignor's hub (enforced by trigger).
+  hub_id         UUID NOT NULL REFERENCES hubs(id),
+  type           consignor_type NOT NULL,
+  name           VARCHAR(200) NOT NULL,
+  phone          VARCHAR(20),
+  email          CITEXT,
+  company        VARCHAR(200),
+  address        TEXT,
+  -- Agreed commission rate captured at onboarding (Vendor & Individual).
+  -- Reference/display only — NO payout calculation or settlement (offline).
+  commission_pct NUMERIC(5,2) CHECK (commission_pct >= 0 AND commission_pct <= 100),
+  notes          TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE INDEX idx_consignors_hub ON consignors (hub_id);
 
 -- -------------------- INVENTORY (CARS) --------------------
 
@@ -941,6 +962,11 @@ CREATE TABLE inspection_requests (
   vin                      VARCHAR(40),
   location_text            TEXT,
   city                     VARCHAR(100),
+  -- Customer geo + nearest-hub routing (migration 004).
+  pincode                  VARCHAR(20),
+  customer_latitude        NUMERIC(10, 7),
+  customer_longitude       NUMERIC(10, 7),
+  assigned_hub_id          UUID REFERENCES hubs(id),   -- nearest active hub that owns this request
   inspection_report_id     UUID REFERENCES inspection_reports(id),
   resulting_car_id         UUID REFERENCES cars(id),
   external_inspection_id   UUID,
@@ -951,6 +977,7 @@ CREATE TABLE inspection_requests (
     type <> 'PDI' OR pdi_subtype IS NOT NULL
   )
 );
+CREATE INDEX idx_inspection_requests_assigned_hub ON inspection_requests (assigned_hub_id, status);
 
 ALTER TABLE inspection_reports
   ADD CONSTRAINT fk_inspection_reports_request
@@ -1190,15 +1217,24 @@ Each module below documents: **purpose, actors, key APIs, E2E workflow (sequence
 
 ### 10.1 Module: Identity, Auth & Profile
 
-**Purpose:** Three login types with client-scoped JWTs; profile management; RBAC for employees/admins.
+**Purpose:** Three login types with client-scoped JWTs; **hub-scoped role hierarchy**; staff onboarding; profile management; RBAC for employees/admins.
 
-#### 10.1.1 Login Types Summary
+#### 10.1.1 Login Types & Roles Summary
 
-| Login | Endpoint prefix | Method | Clients in JWT `allowedClients` |
-|-------|-----------------|--------|-----------------------------------|
-| **User Login** | `/v1/auth/user/*` | OTP | `UserApp`, `Website` |
-| **Employee Login** | `/v1/auth/employee/*` | Password (+ optional MFA) | `EmployeeApp`, `InspectionApp` |
-| **Admin Login** | `/v1/auth/admin/*` | Password + MFA (required) | `AdminPortal`, `EmployeeApp`, `InspectionApp` |
+| Login | Endpoint prefix | Method | Roles | Clients in JWT `allowedClients` |
+|-------|-----------------|--------|-------|-----------------------------------|
+| **User Login** | `/v1/auth/user/*` | OTP | `user` | `UserApp`, `Website` |
+| **Employee Login** | `/v1/auth/employee/*` | Password (+ optional MFA) | `hub_employee` | `EmployeeApp`, `InspectionApp` |
+| **Admin Login** | `/v1/auth/admin/*` | Password + MFA (required) | `super_admin`, `hub_admin` | `AdminPortal` |
+
+**Role → scope & onboarding authority**
+
+| Role | Hub scope | Can create | Can onboard consignors |
+|------|-----------|------------|------------------------|
+| `super_admin` | All hubs (global; one seeded/static login) | Hubs, Hub Admins, Hub Employees | Yes (any hub) |
+| `hub_admin` | Assigned hub(s) | Hub Employees (for their hub[s]) | Yes (their hub[s]) |
+| `hub_employee` | Assigned hub(s) | — | No |
+| `user` | — | — | No |
 
 **JWT claims (all login types)**
 
@@ -1207,14 +1243,24 @@ Each module below documents: **purpose, actors, key APIs, E2E workflow (sequence
   "sub": "user-uuid",
   "accountType": "User | Employee | Admin",
   "allowedClients": ["UserApp", "Website"],
-  "roles": ["buyer"],
-  "permissions": ["cars:read", "interest:create"],
-  "clientId": "UserApp",
+  "roles": ["hub_admin"],
+  "hubIds": ["hub-uuid-1", "hub-uuid-2"],
+  "permissions": ["cars:read", "consignors:create"],
+  "clientId": "AdminPortal",
   "exp": 1720700000
 }
 ```
 
-The gateway validates that the calling app's `X-Client-Id` header is included in `allowedClients`. Admin tokens additionally satisfy Admin API permission checks.
+The gateway validates that the calling app's `X-Client-Id` header is included in `allowedClients`. Beyond client scoping, the service layer enforces **hub scoping**: for `hub_admin`/`hub_employee` every hub-owned resource is filtered by the token's `hubIds` (empty/absent `hubIds` on a `super_admin` = global). Admin tokens additionally satisfy Admin API permission checks.
+
+**Staff onboarding APIs**
+
+| Method | Endpoint | Who | Description |
+|--------|----------|-----|-------------|
+| POST | `/v1/admin/hubs` | `super_admin` | Onboard a hub (yard) |
+| POST | `/v1/admin/staff` | `super_admin` (any role/hub), `hub_admin` (`hub_employee` on their hub[s]) | Create a staff login; assign role + hub(s) |
+| PATCH | `/v1/admin/staff/{id}` | `super_admin`, `hub_admin` (own hub staff) | Update role/hub assignment / deactivate |
+| GET | `/v1/admin/staff?hubId=&role=` | `super_admin`, `hub_admin` (own hub[s]) | List staff, hub-scoped |
 
 **Key APIs**
 
@@ -1222,10 +1268,10 @@ The gateway validates that the calling app's `X-Client-Id` header is included in
 |--------|----------|------------|-------------|
 | POST | `/v1/auth/user/otp/request` | User | Send OTP for User App / Website |
 | POST | `/v1/auth/user/otp/verify` | User | Verify OTP → User-scoped tokens |
-| POST | `/v1/auth/employee/login` | Employee | Password login → Employee + Inspection App tokens |
+| POST | `/v1/auth/employee/login` | Employee | Password login (`hub_employee`) → Employee + Inspection App tokens |
 | POST | `/v1/auth/employee/mfa/verify` | Employee | Complete MFA step if enabled |
-| POST | `/v1/auth/admin/login` | Admin | Password login → MFA challenge |
-| POST | `/v1/auth/admin/mfa/verify` | Admin | Verify MFA → Admin-scoped tokens |
+| POST | `/v1/auth/admin/login` | Admin | Password login (`super_admin`/`hub_admin`) → MFA challenge |
+| POST | `/v1/auth/admin/mfa/verify` | Admin | Verify MFA → Admin Portal token (hub-scoped) |
 | POST | `/v1/auth/refresh` | All | Rotate access token (same `allowedClients`) |
 | POST | `/v1/auth/logout` | All | Revoke refresh token |
 | GET/PUT | `/v1/me` | All | Get/update profile |
@@ -1263,32 +1309,32 @@ sequenceDiagram
 
     E->>EA: Enter employee ID + password
     EA->>GW: POST /auth/employee/login {username, password, clientId: EmployeeApp|InspectionApp}
-    GW->>ID: validate staff_credentials
+    GW->>ID: validate staff_credentials (role=hub_employee)
     alt MFA enabled
         ID-->>EA: mfaRequired + mfaSessionId
         E->>EA: Enter TOTP
         EA->>GW: POST /auth/employee/mfa/verify
     end
-    ID-->>EA: JWT accountType=Employee, allowedClients=[EmployeeApp, InspectionApp]
-    Note over EA: Same token works in Employee App<br/>and Inspection App (existing login updated)
+    ID-->>EA: JWT accountType=Employee, allowedClients=[EmployeeApp, InspectionApp], hubIds=[...]
+    Note over EA: Same token works in Employee App<br/>and Inspection App (existing login updated).<br/>Actions filtered to the employee's hub(s).
 ```
 
-**E2E Workflow — Admin Login**
+**E2E Workflow — Admin Login (Super Admin / Hub Admin)**
 
 ```mermaid
 sequenceDiagram
     actor A as Admin
-    participant ADM as Admin Portal / Employee App / Inspection App
+    participant ADM as Admin Portal
     participant GW as API Gateway
     participant ID as Identity Svc
 
     A->>ADM: Enter admin username + password
-    ADM->>GW: POST /auth/admin/login {username, password, clientId}
+    ADM->>GW: POST /auth/admin/login {username, password, clientId: AdminPortal}
     ID-->>ADM: mfaRequired (always for Admin)
     A->>ADM: Enter TOTP
     ADM->>GW: POST /auth/admin/mfa/verify
-    ID-->>ADM: JWT accountType=Admin, allowedClients=[AdminPortal, EmployeeApp, InspectionApp]
-    Note over ADM: Admin token grants Admin Portal APIs<br/>+ all Employee APIs + Inspection App access
+    ID-->>ADM: JWT accountType=Admin, allowedClients=[AdminPortal], roles=[super_admin|hub_admin], hubIds=[...]
+    Note over ADM: Admin token is DASHBOARD-ONLY (no Employee/Inspection App).<br/>super_admin = all hubs; hub_admin = assigned hubs only.
 ```
 
 **States/Rules**
@@ -1307,21 +1353,62 @@ sequenceDiagram
 
 **Purpose:** Manage the lifecycle of each unique car from acquisition to delisting; publish "Live" cars to buyers. Supports **three listing sources** with the same buyer-facing experience.
 
-**Actors:** Catalog Admin, Hub Manager, Technician *(inspects via external Inspection App)*, System (indexing).
+**Actors:** Hub Admin *(their hub[s])*, Super Admin *(all hubs)*, Hub Employee — Inspection Technician *(inspects via external Inspection App)*, System (indexing).
+
+> **Who manages the catalog:** listings are created/edited on the **Admin Portal** by a **Hub Admin** (scoped to their hub[s]) or the **Super Admin** (all hubs). **Hub Employees do not edit the catalog** — the Employee App is for sales, test-drive, and inspection operations. Every car is assigned to a hub (`cars.hub_id`), and all hub-owned inventory queries are filtered by the caller's hub scope.
 
 #### Listing Sources
 
-| Source (`listing_source`) | Meaning | Consignor captured? | Inspection PDF | Commission |
-|---------------------------|---------|---------------------|----------------|------------|
+| Source (`listing_source`) | Meaning | Consignor captured? | Inspection PDF | Commission % |
+|---------------------------|---------|---------------------|----------------|--------------|
 | **Owned** | Dealer's own pre-owned stock | No | **Mandatory** | N/A |
-| **ConsignedVendor** | Another vendor's car sold on commission | Yes — `Consignor.type = Vendor` | **Mandatory** | **Not tracked (out of scope)** |
-| **ConsignedIndividual** | An individual owner's car sold on commission | Yes — `Consignor.type = Individual` | **Mandatory** | **Not tracked (out of scope)** |
+| **ConsignedVendor** | Another vendor's car sold on commission | Yes — `Consignor.type = Vendor` | **Mandatory** | **Rate captured on Consignor** (payout/settlement offline) |
+| **ConsignedIndividual** | An individual owner's car sold on commission | Yes — `Consignor.type = Individual` | **Mandatory** | **Rate captured on Consignor** (payout/settlement offline) |
 
-- Source is a **required attribute** at car creation. For consigned sources, a **Consignor** (name + contact, optionally company/address) is linked for the dealer's operational reference.
+- Source is a **required attribute** at car creation. For consigned sources, a **Consignor** (name + contact, optionally company/address, **and the agreed commission %**) is linked for the dealer's operational reference.
 - **Inspection Report PDF is mandatory for ALL three sources** — the publish gate (below) rejects any car without an ingested, passing report, with no exception for consigned cars.
-- To buyers, all three render identically as listings — source is **internal-only** (visible to dealer staff/admin, not necessarily to buyers).
+- To buyers, all three render identically as listings — source **and commission %** are **internal-only** (visible to dealer staff/admin, never to buyers).
+- **Buyers never see the internal hub identity** (hub id/name/code). Public listings show only **city/area** and **distance** (derived from the hub's geo); the exact hub address is revealed only **after** a test-drive booking or reservation is confirmed. The hub is used internally to decide **which hub's employees own the activity**.
 - The **unique-VIN, sell-once** rule and reservation concurrency apply **regardless of source**.
-- The app records the consignor but performs **no commission calculation, tracking, payout, or settlement** — that remains the dealer's offline process.
+- The app records the consignor's **agreed commission %** but performs **no payout calculation, balance tracking, or settlement** — that remains the dealer's offline process.
+
+#### Consignor Onboarding
+
+Before (or while) listing a consigned car, an Admin onboards the **Consignor** — the vendor or individual who owns the car. Consignors are onboarded **for a specific hub** by a **Hub Admin** (their own hub) or the **Super Admin** (any hub). This is where the **agreed commission %** is captured. A consignor is created once and can be reused across multiple consigned cars **within that hub**.
+
+```mermaid
+flowchart LR
+    A[Hub Admin / Super Admin<br/>opens Consignors] --> B[+ Add Consignor]
+    B --> H[Select Hub<br/>Hub Admin: own hub; Super Admin: any]
+    H --> C[Choose type:<br/>Vendor / Individual]
+    C --> D[Enter name + contact<br/>company/address if Vendor]
+    D --> E[Set agreed<br/>Commission % 0-100]
+    E --> F[Save -> POST /v1/admin/consignors]
+    F --> G[Consignor available to link on<br/>consigned cars OF THAT HUB]
+```
+
+- Each consignor is **bound to exactly one hub** (`consignors.hub_id`, required). A consigned car **must be assigned to the same hub as its consignor** (enforced by DB trigger `trg_car_consignor_same_hub`).
+- **Both types** (`Vendor` and `Individual`) capture a `commission_pct` (0–100). It is **optional at the schema level** (a consignor may be onboarded before terms are agreed) but the Admin UI **prompts for it at onboarding**.
+- The rate is **reference/display data only** — surfaced to staff on the consignor and consigned-car screens. There is **no payout math, ledger, or settlement**.
+- Editing a consignor's `commission_pct` later applies going forward for display; historical deals are closed offline.
+- **Authorization:** a Hub Admin sees/manages only their hub's consignors; the Super Admin sees all.
+
+**E2E Workflow — Onboard a Consigned Vehicle**
+
+```mermaid
+flowchart LR
+    A[Consignor onboarded<br/>with commission %] --> B[Create car Draft:<br/>source = Consigned* + link Consignor + VIN]
+    B --> C[Consigned car inherits<br/>consignor's commission % for display]
+    C --> D[Technician inspects in<br/>EXISTING Inspection App -> PDF]
+    D --> E[AssureCars ingests PDF<br/>auto-maps by VIN - §10.14]
+    E --> F{Pass?}
+    F -- No --> G[Refurbish -> re-inspect]
+    G --> D
+    F -- Yes --> H[Certified + price set]
+    H --> I[Publish -> Live<br/>same buyer experience as Owned]
+```
+
+> The commission % rides along the consignor for the dealer's reference; it never affects the buyer-facing listing, pricing display, or the publish gate.
 
 **Car Lifecycle State Machine**
 
@@ -1397,15 +1484,16 @@ sequenceDiagram
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/v1/admin/cars` | Create draft car (requires `vin` + `listingSource`; `consignorId` if consigned). **Auto-maps any inspection report(s) already ingested for that VIN** |
+| GET | `/v1/admin/cars?hubId=&status=&listingSource=&q=` | List/search inventory, **hub-scoped** (Hub Admin auto-limited to own hub[s]; Super Admin may pass any `hubId`) |
+| POST | `/v1/admin/cars` | Create draft car (requires `vin`, `listingSource`, `hubId`; `consignorId` if consigned — its hub must equal `hubId`). **Auto-maps any inspection report(s) already ingested for that VIN** |
 | PATCH | `/v1/admin/cars/{id}` | Update attributes/pricing/source. Changing `vin` re-runs VIN auto-mapping |
 | POST | `/v1/admin/cars/{id}/publish` | Move to Live (validates report + price) |
-| GET | `/v1/cars/{id}` | Public detail (Live only) |
+| GET | `/v1/cars/{id}` | Public detail (Live only) — **no hub identity**, only city/area + distance |
 | GET | `/v1/cars/{id}/inspection-report` | Certified inspection report |
-| GET/POST | `/v1/admin/consignors` | List/create consignors (vendor/individual) |
-| PATCH | `/v1/admin/consignors/{id}` | Update consignor details |
+| GET/POST | `/v1/admin/consignors` | List/create consignors (vendor/individual) incl. `commissionPct` |
+| PATCH | `/v1/admin/consignors/{id}` | Update consignor details incl. `commissionPct` |
 
-**Edge cases:** VIN uniqueness enforced; **VIN is mandatory at creation** (it is the inspection correlation key); **consigned sources require a linked consignor**; **publishing is blocked for ANY source without an ingested, passing inspection report** (+ price); listing a VIN auto-links pending inspection reports (see above); concurrent edits use `row_version`. **No commission fields anywhere** (out of scope).
+**Edge cases:** VIN uniqueness enforced; **VIN is mandatory at creation** (it is the inspection correlation key); **consigned sources require a linked consignor**; **publishing is blocked for ANY source without an ingested, passing inspection report** (+ price); listing a VIN auto-links pending inspection reports (see above); concurrent edits use `row_version`. **Commission `commissionPct` (0–100) is captured on the consignor as reference data; payout calculation/settlement remain out of scope.**
 
 ---
 
@@ -1437,9 +1525,9 @@ sequenceDiagram
     Note over S,ES: CarPublished/CarUpdated/CarSold<br/>events keep index in sync
 ```
 
-**Facets (buyer):** make, model, year, price, body type, fuel, transmission, km, owners, color, hub/city, features.
-**Internal filter (staff/admin only):** `listing_source` (Owned / Consigned-Vendor / Consigned-Individual) and consignor — **not exposed to buyers**.
-**Sort:** relevance, price, newest, low-km, distance.
+**Facets (buyer):** make, model, year, price, body type, fuel, transmission, km, owners, color, **city/area** (derived from the car's hub — **never the hub id/name**), features.
+**Internal filter (staff/admin only):** `hub` (yard), `listing_source` (Owned / Consigned-Vendor / Consigned-Individual) and consignor — **not exposed to buyers**. Staff results are hub-scoped by role.
+**Sort:** relevance, price, newest, low-km, distance (computed from the hub's geo without revealing which hub).
 **Recommendations:** "similar cars", "recently viewed", "price-drop", personalized via events (Phase 2 ML).
 **Consistency:** Sold/Reserved cars removed from index within seconds via events; detail API is source of truth to prevent stale purchase attempts.
 
@@ -1520,6 +1608,8 @@ stateDiagram-v2
 ### 10.5 Module: Test Drive Booking — Concurrent-Slot Engine (Flagship)
 
 **Purpose:** Let buyers book a test drive at a **scheduled date & time**, either **at a hub** or **doorstep**. Because a test drive is **short** (e.g., 20–30 min) relative to a display slot, the system must allow **multiple test drives for the same time slot**, capped by a **configurable capacity** per car/hub/slot.
+
+> **Hub ownership & buyer privacy:** a test drive always belongs to the **hub that holds the car** (`cars.hub_id`), and **that hub's Hub Employees** manage it (booking, reminders, conducting the drive, OTP verify) — hub-scoped so other hubs' staff don't see it. The **buyer never sees the hub id/name**; they choose a car and a time and (for AtHub) see only **city/area + distance** until the booking is confirmed, at which point the **exact hub address** is revealed.
 
 #### 10.5.1 The Concurrency Problem & Solution
 
@@ -1783,7 +1873,16 @@ Should the dealer choose to add this in the future, it would cover online deposi
 
 Both reuse the **slot/appointment** engine (§10.5 infrastructure) to schedule the inspection and the **Inspection Integration** (§10.14) to ingest the resulting PDF.
 
-**Shared intake → scheduling → inspection → report**
+#### Nearest-hub routing
+
+Every Sell/PDI request is **routed to the customer's nearest active hub**, which then **owns the entire activity** (scheduling, inspection, offer/handoff). The owning hub's **Hub Employees** manage it; the **Hub Admin** oversees it; the **Super Admin** can reassign.
+
+- The customer's location is captured as **GPS latitude/longitude** (preferred) or a **pincode that is geocoded** (fallback) — stored on `inspection_requests` (`customer_latitude`, `customer_longitude`, `pincode`).
+- The router picks the **nearest `is_active` hub** by distance to each hub's `latitude/longitude` and sets `assigned_hub_id`.
+- **No hub in range / geo missing:** the request is created with `assigned_hub_id = NULL` and parked for **manual assignment** by the Super Admin.
+- The **buyer never sees the hub identity** — they only see status and, once scheduled, the appointment address/time.
+
+**Shared intake → routing → scheduling → inspection → report**
 
 ```mermaid
 sequenceDiagram
@@ -1791,23 +1890,30 @@ sequenceDiagram
     participant C as User App / Web
     participant GW as Gateway
     participant IR as Inspection-Request Svc
+    participant ROUTE as Nearest-Hub Router
     participant SLOT as Slot/Appointment
     participant INS as Inspection App (existing)
     participant II as Inspection Integration
     participant N as Notification
 
-    U->>C: Submit request (type = Sell | PDI, car + location details)
-    C->>GW: POST /inspection-requests {type, subtype?, car, location}
+    U->>C: Submit request (type = Sell | PDI, car + location: GPS/pincode)
+    C->>GW: POST /inspection-requests {type, subtype?, car, lat/lng|pincode}
     GW->>IR: create request (status=Requested)
-    IR->>SLOT: offer inspection appointment slots
+    IR->>ROUTE: find nearest active hub
+    alt hub in range
+        ROUTE-->>IR: assigned_hub_id set
+    else none in range
+        ROUTE-->>IR: assigned_hub_id = NULL (await Super Admin)
+    end
+    IR->>SLOT: offer inspection slots at the assigned hub
     U->>C: pick slot -> status=Scheduled
-    Note over INS: Technician performs inspection<br/>in the EXISTING app -> PDF
+    Note over INS: Hub Employee (technician) inspects<br/>in the EXISTING app -> PDF
     INS->>II: finalized report (PDF + summary + requestRef)
     II->>IR: link report -> status=ReportReady
     IR->>N: notify user report is ready
     alt type = Sell
-        IR->>IR: hand off to dealer -> offer/negotiate OFFLINE
-        Note over IR: on acceptance -> create Car(Draft),<br/>report already available for §10.2 publish
+        IR->>IR: assigned hub handles offer/negotiate OFFLINE
+        Note over IR: on acceptance -> create Car(Draft) IN THE ASSIGNED HUB,<br/>report already available for §10.2 publish
     else type = PDI
         IR-->>U: deliver PDF report (download/link)
     end
@@ -1838,12 +1944,14 @@ flowchart LR
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/v1/inspection-requests` | Submit a Sell or PDI request |
-| GET | `/v1/inspection-requests/{id}` | Track status + report link when ready |
+| POST | `/v1/inspection-requests` | Submit a Sell or PDI request (include `lat`/`lng` or `pincode`); server sets `assignedHubId` via nearest-hub routing |
+| GET | `/v1/inspection-requests/{id}` | Track status + report link when ready (no hub identity exposed) |
 | GET | `/v1/me/inspection-requests` | User's requests |
-| PATCH | `/v1/employee/inspection-requests/{id}` | Staff: schedule / close / add notes |
+| PATCH | `/v1/employee/inspection-requests/{id}` | **Assigned hub's** staff: schedule / close / add notes (hub-scoped) |
+| PATCH | `/v1/admin/inspection-requests/{id}/assign` | **Super Admin:** (re)assign the hub when auto-routing had no hub in range or a change is needed |
 
-- On **Sell** acceptance, a `Car` is created in `Draft` with the already-ingested report → flows into §10.2 onboarding (publish gate is satisfied).
+- On **Sell** acceptance, a `Car` is created in `Draft` **in the assigned hub** with the already-ingested report → flows into §10.2 onboarding (publish gate is satisfied).
+- Staff access is **hub-scoped**: only the assigned hub's employees/admin (and the Super Admin) can act on a request.
 
 ---
 
@@ -1883,24 +1991,26 @@ flowchart LR
 
 ### 10.12 Module: Admin & Configuration
 
-**Purpose:** Let the **dealer self-manage their instance** — catalog, pricing display, inventory, hubs, **slot capacity config**, users/RBAC, content, reservations, and dealer-level settings (branding, providers).
+**Purpose:** Let the **dealer self-manage their instance** — catalog, pricing display, inventory, hubs, **slot capacity config**, users/RBAC, content, reservations, and dealer-level settings (branding, providers). The Admin Portal is used by two roles: **Super Admin** (global) and **Hub Admin** (scoped to assigned hub[s]).
 
-**Capabilities**
+**Capabilities** (scope column: **SA** = Super Admin only; **HA** = Hub Admin, within their hub[s]; SA can do everything HA can, across all hubs)
 
-| Area | Functions | Phase |
-|------|-----------|-------|
-| Catalog & Pricing display | CRUD cars, bulk import, display price, publish/delist, **set listing source** | MVP |
-| Consignors | Manage vendor/individual consignor records; link to consigned cars *(no commission tracking)* | MVP |
-| Inventory & Hubs | Hubs, bays, staff, blackout dates | MVP |
-| **Test-Drive Config** | Slot templates, **capacity per slot**, duration, buffer, doorstep zones | MVP |
-| Reservations | View/close/release reservations (non-financial) | MVP |
-| Users & RBAC | Roles, permissions, staff onboarding, step-up MFA | MVP |
-| Leads & CRM | Assignment rules, SLA thresholds, escalation | MVP |
-| Dealer Settings | Branding/logo, domain, notification providers/keys, localization | MVP |
-| Content/CMS | Banners, landing pages, SEO metadata | MVP |
-| Promotions/Coupons | Discounts, campaigns | Phase 2 |
-| Payments/Refunds admin | Transactions, refunds, invoices, ledger | future scope |
-| Feature Flags | Toggle newly shipped modules per release | MVP |
+| Area | Functions | Scope | Phase |
+|------|-----------|-------|-------|
+| Catalog & Pricing display | CRUD cars, bulk import, display price, publish/delist, **set listing source** | HA (own hub), SA (all) | MVP |
+| Consignors | Manage vendor/individual consignor records **incl. agreed commission %**, **scoped to a hub**; link to consigned cars *(payout/settlement offline)* | HA (own hub), SA (all) | MVP |
+| Hubs (yards) | **Onboard/edit hubs**, geo, blackout dates | **SA only** | MVP |
+| Inventory & Bays | Bays, blackout dates | HA (own hub), SA (all) | MVP |
+| **Test-Drive Config** | Slot templates, **capacity per slot**, duration, buffer, doorstep zones | HA (own hub), SA (all) | MVP |
+| Reservations | View/close/release reservations (non-financial) | HA (own hub), SA (all) | MVP |
+| Users & RBAC | Staff onboarding, step-up MFA; **SA creates Hub Admins + Hub Employees & assigns hubs; HA creates Hub Employees for own hub(s)** | SA + HA (see note) | MVP |
+| Leads & CRM | Assignment rules, SLA thresholds, escalation | HA (own hub), SA (all) | MVP |
+| Sell/PDI requests | Triage assigned-hub requests; **SA (re)assigns hub** when none in range | HA (own hub), SA (all + reassign) | Phase 2 |
+| Dealer Settings | Branding/logo, domain, notification providers/keys, localization | **SA only** | MVP |
+| Content/CMS | Banners, landing pages, SEO metadata | **SA only** | MVP |
+| Promotions/Coupons | Discounts, campaigns | SA only | Phase 2 |
+| Payments/Refunds admin | Transactions, refunds, invoices, ledger | — | future scope |
+| Feature Flags | Toggle newly shipped modules per release | **SA only** | MVP |
 
 **E2E Workflow — Configure Test-Drive Capacity**
 
@@ -2123,8 +2233,8 @@ Targets are sized for an **SMB dealer on a single self-hosted server** (not a hy
 
 ## 13. Security Design
 
-- **AuthN:** **Three login types** — User (OTP), Employee (password), Admin (password + MFA). All issue short-lived JWTs with `accountType` and `allowedClients` claims. Refresh tokens rotated with reuse detection.
-- **AuthZ:** Gateway enforces **client access matrix** (§4.1) then RBAC permissions. User Login → user APIs only. Employee Login → employee APIs + Inspection App. Admin Login → admin + employee APIs + Inspection App.
+- **AuthN:** **Three login types** — User (OTP), Employee (password), Admin (password + MFA). All issue short-lived JWTs with `accountType`, `allowedClients`, `roles`, and `hubIds` claims. Refresh tokens rotated with reuse detection.
+- **AuthZ:** Gateway enforces the **client access matrix** (§4.1), then **role + hub scoping**, then RBAC permissions. User Login → user APIs only. Employee Login (`hub_employee`) → employee APIs + Inspection App, **scoped to assigned hub(s)**. Admin Login → Admin Portal APIs only; `hub_admin` **scoped to assigned hub(s)**, `super_admin` global. The Inspection App accepts **only `hub_employee`** tokens.
 - **Tenant isolation:** each dealer is a **separate self-hosted instance** with its own DB/storage/secrets — strong isolation by construction (no shared data plane).
 - **Data protection:** TLS everywhere; encryption at rest; PII (phone) protected; media/inspection PDFs in **private** storage served via short-lived pre-signed URLs.
 - **App hardening:** cert pinning (mobile), secure storage (Keychain/Keystore).
@@ -2242,11 +2352,12 @@ The guiding rule: **get a dealer online fast with a non-financial MVP, then add 
 | 9 | Feature flags + config-not-fork | "Gradually add features"; every dealer stays on the upgrade path |
 | 10 | Integrate existing Inspection App (don't rebuild) | Reuse the proven app + its well-designed PDF; ingest via webhook with anti-corruption layer |
 | 11 | Reservation designed to be payment-ready | future scope payments slot in without reworking inventory concurrency |
-| 12 | `listing_source` + `Consignor`, but **no commission tracking** | Support owned + consigned (vendor/individual) listings uniformly; commission stays offline (out of scope) |
+| 12 | `listing_source` + `Consignor` with **commission % captured, but no payout/settlement** | Support owned + consigned (vendor/individual) listings uniformly; record the agreed commission rate for reference while payout calculation/settlement stays offline (out of scope) |
 | 13 | **Inspection PDF mandatory for all sourcing** | Uniform trust bar; single publish gate regardless of owned/consigned |
 | 14 | Unified **Inspection Services** (Sell + PDI) on one request model | Both are user-initiated inspections via the existing app; shared scheduling + PDF ingestion, routed by `context` |
 | 15 | **Normalized inspection schema** + JSONB archive | Maps confirmed Inspection App JSON (reportId, categoryRatings, valuation) to queryable tables; PDF in object storage |
-| 16 | **Three login types** with client-scoped JWTs | User→User App+Website; Employee→Employee App+Inspection App; Admin→Admin Portal+Employee App+Inspection App; Inspection App federates existing login |
+| 16 | **Three login types + hub-scoped role hierarchy** | User→User App+Website; Hub Employee→Employee App+Inspection App (hub-scoped); Super/Hub Admin→Admin Portal only (hub_admin scoped, super_admin global); Inspection App federates existing login, accepts Hub Employee tokens only |
+| 17 | **Multi-hub scoping** for consignors, inventory & Sell/PDI | Consignor bound to one hub; consigned car shares consignor's hub; Sell/PDI routed to nearest hub; buyers never see internal hub identity (city/area + distance only) |
 
 ---
 
@@ -2259,7 +2370,7 @@ The guiding rule: **get a dealer online fast with a non-financial MVP, then add 
 | Instance | One dealer's isolated, self-hosted deployment (own DB/storage/domain) |
 | VIN | Vehicle Identification Number (unique per car) |
 | Listing Source | Origin of a listing: `Owned`, `ConsignedVendor`, or `ConsignedIndividual` |
-| Consignor | The vendor/individual who owns a consigned car (contact record only; no commission tracking) |
+| Consignor | The vendor/individual who owns a consigned car (contact record + agreed commission %; no payout calculation/settlement) |
 | PDI | Pre-Delivery Inspection — user-requested inspection of a car being bought elsewhere (new, or used from another dealer) |
 | Sell Request | User-initiated request to sell their car to the dealer |
 | Slot | A bookable test-drive time window with a **capacity** |
@@ -2268,10 +2379,15 @@ The guiding rule: **get a dealer online fast with a non-financial MVP, then add 
 | Hold TTL | Time a car stays reserved before auto-release (no payment involved in MVP) |
 | Lead | A captured buyer intent tracked through a funnel |
 | Idempotency Key | Client token making a request safely retryable |
-| User Login | OTP authentication for end-users; grants User App + Website API access |
-| Employee Login | Password authentication for dealer staff; grants Employee App + Inspection App access |
-| Admin Login | Password + MFA for administrators; grants Admin Portal + Employee App + Inspection App access |
+| User Login | OTP authentication for end-users (`user`); grants User App + Website API access |
+| Employee Login | Password authentication for dealer staff (`hub_employee`); grants Employee App + Inspection App access, hub-scoped |
+| Admin Login | Password + MFA for administrators (`super_admin` / `hub_admin`); grants **Admin Portal only** (dashboard) |
+| Super Admin | Global administrator (all hubs); one seeded/static login; onboards hubs, hub admins, hub employees, consignors |
+| Hub Admin | Hub-scoped administrator; onboards hub employees + consignors and manages the catalog for their hub(s) |
+| Hub Employee | Hub-scoped staff (sales/driver/technician); Employee App + Inspection App |
+| Hub (yard) | A physical dealer location; every car has a `hub_id`; consignors and staff are scoped to hubs |
 | `allowedClients` | JWT claim listing which client apps may use the token |
+| `hubIds` | JWT claim listing the hubs a staff token is scoped to (absent/empty ⇒ global super_admin) |
 
 ---
 
@@ -2283,9 +2399,10 @@ The guiding rule: **get a dealer online fast with a non-financial MVP, then add 
 - **Assumption:** One car = one VIN = sellable once; test drives are non-exclusive.
 - **Open:** Licensing/pricing model for dealers (per-instance subscription, tiers, paid modules) and how updates are delivered/enforced.
 - **Open:** Minimum self-host target — do dealers run on-prem, their own cloud VM, or a vendor-managed single-tenant host? Affects backup/monitoring ownership.
-- **Assumption (Auth):** Three login types with client-scoped JWTs — **User Login** (OTP) for User App + Website; **Employee Login** (password) for Employee App + Inspection App; **Admin Login** (password + MFA) for Admin Portal + Employee App + Inspection App. See §4.1 and [API-Documentation.md](./API-Documentation.md) §2.
-- **Assumption (Inspection App auth):** The **existing Inspection App login** will be updated separately to accept AssureCars-issued **Employee** or **Admin** tokens. AssureCars does not rebuild Inspection App auth. User Login tokens are never valid in the Inspection App.
-- **Confirmed (Inspection App):** Output includes structured JSON (see Solution Design §9.2) plus PDF. **Auth:** existing Inspection App login will be updated to accept AssureCars **Employee Login** or **Admin Login** tokens (`X-Client-Id: InspectionApp`). User Login tokens are never valid in the Inspection App.
+- **Confirmed (Auth):** Three login types + **hub-scoped role hierarchy** — **User Login** (OTP, `user`) for User App + Website; **Employee Login** (password, `hub_employee`) for Employee App + Inspection App, hub-scoped; **Admin Login** (password + MFA) for **Admin Portal only** — `hub_admin` (hub-scoped) and `super_admin` (global). Super Admin onboards hubs/hub-admins; Hub Admin onboards hub-employees/consignors. See §4.1 and [API-Documentation.md](./API-Documentation.md) §2.
+- **Confirmed (Inspection App auth):** The **existing Inspection App login** will be updated separately to accept AssureCars-issued **Hub Employee (Employee Login)** tokens (`X-Client-Id: InspectionApp`). AssureCars does not rebuild Inspection App auth. User Login and Admin (dashboard) tokens are never valid in the Inspection App.
+- **Confirmed (Inspection App):** Output includes structured JSON (see Solution Design §9.2) plus PDF.
+- **Confirmed (Multi-hub):** A dealer instance runs one or more hubs (yards). Each **Consignor is scoped to one hub**; a consigned car shares its consignor's hub. **Sell/PDI requests route to the customer's nearest active hub** (GPS/pincode; Super Admin can reassign; manual fallback if none in range). **Buyers never see internal hub identity** — city/area + distance only, with the exact address revealed after a confirmed booking/request.
 - **Open (Inspection App):** Does the app POST a webhook natively, or does AssureCars poll / accept manual upload only at launch? Confirm `inspectionRequestId` echo-back for Sell/PDI appointments.
 - **Assumption:** Listing source (`Owned` / `ConsignedVendor` / `ConsignedIndividual`) is captured per car with a linked consignor for consigned cars; source is treated as **internal** (staff/admin) and not shown to buyers by default.
 - **Rule:** The **Inspection Report PDF is mandatory for all sourcing** — the publish gate rejects any car (owned or consigned) without a passing ingested report.

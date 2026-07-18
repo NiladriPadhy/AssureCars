@@ -1,5 +1,34 @@
 <!--
 Sync Impact Report
+Version change: 1.1.0 → 2.0.0 (2026-07-18)
+MAJOR — incompatible redefinition of Principle VII (client-access matrix):
+  - Introduced hub-centric role hierarchy: super_admin (global), hub_admin
+    (hub-scoped), hub_employee (hub-scoped), user.
+  - Admin Login is now Admin Portal ONLY (removed Employee App + Inspection App
+    access from admin tokens).
+  - Inspection App is opened by hub_employee (Employee Login) tokens only
+    (updated Principle V).
+  - Added hub-scoped RBAC, Consignor-per-hub, Sell/PDI nearest-hub routing, and
+    buyer hub-identity privacy to Domain Constraints.
+Propagated to:
+  - ✅ Docs/Solution-Design-Document.md (v2.0)
+  - ✅ Docs/API-Documentation.md (auth matrix, staff/role endpoints, hub scoping)
+  - ✅ database/migrations/004_hub_roles_and_scoping.sql
+  - ✅ README.md
+  - ✅ prototype/app.js
+
+Prior report (1.0.0 → 1.1.0, 2026-07-18):
+Amendment: Consignor onboarding may capture an agreed commission rate (%) as
+non-financial reference data (both Vendor & Individual). Commission payout
+calculation/settlement remains out of scope (offline). Updated Principle III,
+Domain Constraints, and Out-of-Scope list. Propagated to:
+  - ✅ Docs/Solution-Design-Document.md (v1.9)
+  - ✅ Docs/API-Documentation.md (consignor endpoints)
+  - ✅ database/migrations/003_consignor_commission.sql
+  - ✅ README.md
+  - ✅ prototype/app.js (Admin → Consignors)
+
+Prior report (1.0.0):
 Version change: (template) → 1.0.0
 Principles added:
   - I. API-First, Single Source of Truth
@@ -65,7 +94,10 @@ Requirements scoped through Phase 2 MUST remain non-financial. The platform
 captures intent; dealers close deals offline.
 
 - MVP and Phase 2 MUST NOT implement online payments, deposits, EMI/financing,
-  refunds, invoicing, or commission settlement.
+  refunds, invoicing, or commission **settlement/payout computation**.
+- An agreed **commission rate (%)** MAY be recorded on a Consignor at onboarding
+  as non-financial reference data. Recording the rate is permitted; **calculating
+  payouts, tracking balances, or settling commissions MUST remain offline**.
 - Reservations are optimistic, non-financial holds with TTL — not purchases.
 - Financial workflows MAY be designed for future extensibility but MUST NOT
   appear in current scope specs, tasks, or migrations without a constitution
@@ -100,8 +132,8 @@ external system of record. AssureCars MUST NOT rebuild inspection capture.
   anti-corruption layer mapping to normalized tables + object storage.
 - An ingested, passing inspection PDF is MANDATORY before any car (Owned,
   ConsignedVendor, or ConsignedIndividual) transitions to Live.
-- Inspection App auth MUST accept Employee or Admin Login tokens only; User Login
-  tokens MUST be rejected.
+- Inspection App auth MUST accept `hub_employee` (Employee Login) tokens only;
+  User Login and Admin (dashboard) tokens MUST be rejected.
 - Sell and PDI inspection services (Phase 2) MUST route through the same
   external app and ingestion pipeline.
 
@@ -130,27 +162,51 @@ contract-driven, not ad hoc.
 *Rationale:* Independent dev stacks ship in parallel only when the API contract
 is the single integration seam.
 
-### VII. Security & Client-Scoped Auth
+### VII. Security, Client-Scoped Auth & Hub-Scoped RBAC
 
-Three login types issue JWTs scoped by `accountType` and `allowedClients`. The
+Three login types issue JWTs scoped by `accountType` and `allowedClients`, and
+staff authority is further scoped by a **hub-centric role hierarchy**. The
 gateway MUST reject tokens presented to unauthorized clients.
 
 | Login Type | Auth | Clients Granted |
 |------------|------|-----------------|
 | User Login | OTP (phone/email) | User App, Website |
 | Employee Login | Password (+ optional MFA) | Employee App, Inspection App |
-| Admin Login | Password + MFA (required) | Admin Portal, Employee App, Inspection App |
+| Admin Login | Password + MFA (required) | Admin Portal **only** |
+
+**Role hierarchy (staff):**
+
+| Role | Login type | Clients | Scope | Key powers |
+|------|-----------|---------|-------|------------|
+| `super_admin` | Admin | Admin Portal | **All hubs (global)** | Onboards hubs, hub admins, hub employees, consignors; dealer-wide settings. One seeded/static login. |
+| `hub_admin` | Admin | Admin Portal | **Assigned hub(s)** | Onboards hub employees + consignors for their hub(s); manages their hub catalog. |
+| `hub_employee` | Employee | Employee App, Inspection App | **Assigned hub(s)** | Runs sales, test-drive, and inspection ops for their hub(s). |
+| `user` | User | User App, Website | — | Buyer/seller; never sees internal hub identity. |
 
 - Every request MUST include `Authorization: Bearer <JWT>` and
   `X-Client-Id: UserApp|Website|EmployeeApp|AdminPortal|InspectionApp`.
-- RBAC permissions MUST enforce staff authorization beyond client scoping.
+- Admin logins (`super_admin`, `hub_admin`) are **dashboard-only** — Admin
+  Portal, NOT Employee App or Inspection App.
+- The **Inspection App is opened by `hub_employee` tokens** (`InspectionApp`
+  client); this is the only staff role that performs inspections.
+- **Hub scoping MUST be enforced** (row-level) for `hub_admin` and
+  `hub_employee`: they may read/act only within their assigned hub(s)
+  (`employee_hubs`). `super_admin` is global.
+- **Only `super_admin` creates Hub Admins and Hubs.** `hub_admin` and
+  `super_admin` create Hub Employees and consignors for a hub.
+- **Buyers (User/Guest) MUST NOT see internal hub identity** (hub id/name/code).
+  City/area and distance MAY be shown; the exact appointment address is revealed
+  only after a booking/request is confirmed.
+- RBAC permissions MUST enforce staff authorization beyond client + hub scoping.
 - Admin actions, inventory-state changes, capacity changes, and reservations
   MUST be audit-logged.
 - Security MUST align with OWASP ASVS; PII MUST be protected; media and
   inspection PDFs MUST be served via short-lived pre-signed URLs.
 
-*Rationale:* Multiple personas across five clients share one API; client-scoped
-tokens prevent lateral access (e.g., user tokens in admin or inspection flows).
+*Rationale:* A dealer runs multiple hubs (yards) from one instance; hub-scoped
+roles keep each hub's staff to their own inventory and customers, while a global
+super admin governs the whole dealership. Client-scoped tokens prevent lateral
+access (e.g., user tokens in admin or inspection flows).
 
 ## Technology Stack & Platform Constraints
 
@@ -172,7 +228,22 @@ tokens prevent lateral access (e.g., user tokens in admin or inspection flows).
 ### Domain Constraints
 
 - **Listing sources:** `Owned`, `ConsignedVendor`, `ConsignedIndividual` with
-  linked Consignor — commission tracking is OUT OF SCOPE.
+  linked Consignor. The agreed **commission % is captured** on the Consignor at
+  onboarding (reference data); commission **payout calculation/settlement is OUT
+  OF SCOPE** (offline).
+- **Multi-hub (yards):** a single dealer instance runs one or more hubs (yards).
+  Every car is assigned to a hub (`cars.hub_id`); each **Consignor is scoped to
+  exactly one hub**, and a consigned car MUST share its consignor's hub.
+- **Hub-scoped ownership:** the hub that holds a car (or is assigned a Sell/PDI
+  request) owns all downstream activity (leads, test drives, reservations,
+  inspection). Its `hub_employee` staff manage it; `hub_admin` administers it;
+  `super_admin` spans all hubs.
+- **Sell/PDI routing:** user-initiated Sell/PDI requests are routed to the
+  customer's **nearest active hub** (GPS, fallback pincode geocode); `super_admin`
+  may reassign; if no hub is in range the request awaits manual assignment.
+- **Buyer hub privacy:** the internal hub identity (id/name/code) MUST NOT be
+  exposed to buyers; city/area + distance MAY be shown; exact address only after
+  a confirmed booking/request.
 - **Phase scope:** MVP-a (Get Online) → MVP-b (Capture Demand) → Phase 2
   (Engage & Grow). Financial module is future scope only.
 - **Flagship feature:** Concurrent-slot test-drive booking engine with
@@ -184,7 +255,8 @@ tokens prevent lateral access (e.g., user tokens in admin or inspection flows).
 ### Explicitly Out of Scope (Current)
 
 - Online payments, deposits, financing, refunds
-- Commission tracking and settlement
+- Commission **payout calculation & settlement** (the agreed rate is recorded on
+  the Consignor for reference only)
 - Multi-tenant SaaS shared data plane
 - C2C private listings / auctions
 - Rebuilding the Inspection Mobile App
@@ -252,4 +324,4 @@ simpler alternatives.
 living references; where they conflict with this constitution, the constitution
 prevails until docs are amended.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-12 | **Last Amended**: 2026-07-12
+**Version**: 2.0.0 | **Ratified**: 2026-07-12 | **Last Amended**: 2026-07-18

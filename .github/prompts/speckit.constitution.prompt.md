@@ -50,7 +50,7 @@ Encode as declarative, testable MUST/SHOULD rules:
 
 ## Additional Constraints Section
 
-- **Listing sources:** Owned, ConsignedVendor, ConsignedIndividual — consignor recorded, commission tracking OUT OF SCOPE
+- **Listing sources:** Owned, ConsignedVendor, ConsignedIndividual — consignor recorded with agreed commission % (captured at onboarding, both Vendor & Individual); commission payout calculation/settlement OUT OF SCOPE (offline)
 - **Flagship capability:** Concurrent-slot test-drive booking engine
 - **Phase scope:** MVP-a (Get Online) → MVP-b (Capture Demand) → Phase 2 (Engage & Grow); financial workflows explicitly future/out-of-scope
 - **NFR targets:** SMB single-server; search p95 < 500ms; booking p95 < 800ms; WCAG 2.1 AA on web; structured logs + Sentry

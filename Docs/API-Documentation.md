@@ -3,8 +3,8 @@
 **Product:** AssureCars — Premium Certified Used-Car Reseller Platform  
 **API Version:** v1  
 **Base URL:** `https://{dealer-domain}/api/v1`  
-**Status:** Draft — aligned with Solution Design Document v1.8  
-**Last Updated:** 2026-07-17
+**Status:** Draft — aligned with Solution Design Document v2.0  
+**Last Updated:** 2026-07-18
 
 ---
 
@@ -74,30 +74,32 @@
 }
 ```
 
-### 1.3 Login Types & Client Access
+### 1.3 Login Types, Roles & Client Access
 
-AssureCars has **three login types**. Each issues JWTs scoped to specific client applications. The API gateway rejects a token if the request's `X-Client-Id` is not in the token's `allowedClients` claim.
+AssureCars has **three login types** plus a **hub-scoped role hierarchy**. Each login issues JWTs scoped to specific client applications; staff tokens are further scoped to hub(s) via `hubIds`. The API gateway rejects a token if the request's `X-Client-Id` is not in the token's `allowedClients`, and the service layer enforces hub scoping.
 
-| Login type | Auth method | Client apps | API groups allowed |
-|------------|-------------|-------------|-------------------|
-| **User Login** | OTP (phone) | `UserApp`, `Website` | Public APIs + User APIs (`/v1/me`, interest, test drives, reservations, inspection requests) |
-| **Employee Login** | Password (+ MFA if enabled) | `EmployeeApp`, `InspectionApp` | Public APIs + Employee APIs (`/v1/employee/*`, test-drive execution) |
-| **Admin Login** | Password + MFA (required) | `AdminPortal`, `EmployeeApp`, `InspectionApp` | Public + Employee + Admin APIs (`/v1/admin/*`) |
+| Login type | Auth method | Roles | Client apps | API groups allowed |
+|------------|-------------|-------|-------------|-------------------|
+| **User Login** | OTP (phone) | `user` | `UserApp`, `Website` | Public APIs + User APIs (`/v1/me`, interest, test drives, reservations, inspection requests) |
+| **Employee Login** | Password (+ MFA if enabled) | `hub_employee` | `EmployeeApp`, `InspectionApp` | Public APIs + Employee APIs (`/v1/employee/*`, test-drive execution), **hub-scoped** |
+| **Admin Login** | Password + MFA (required) | `super_admin`, `hub_admin` | `AdminPortal` | Public + Admin APIs (`/v1/admin/*`); `hub_admin` **hub-scoped**, `super_admin` global |
 
-**Inspection App:** Uses **Employee Login** or **Admin Login** tokens only. The existing Inspection App login screen will be updated separately to authenticate against AssureCars IdP. **User Login tokens are never accepted.**
+**Admin is dashboard-only:** `super_admin`/`hub_admin` tokens grant **Admin Portal only** — never Employee App or Inspection App.
 
-**Guest (no login):** Public read-only APIs only — browse cars, hubs, CMS banners.
+**Inspection App:** Uses **Employee Login (`hub_employee`)** tokens only. The existing Inspection App login screen will be updated separately to authenticate against AssureCars IdP. **User Login and Admin tokens are never accepted.**
+
+**Guest (no login):** Public read-only APIs only — browse cars, CMS banners (never internal hub identity).
 
 #### API Access Matrix
 
-| API group | Guest | User Login | Employee Login | Admin Login |
+| API group | Guest | User Login | Employee Login (`hub_employee`) | Admin Login (`super_admin`/`hub_admin`) |
 |-----------|-------|------------|----------------|-------------|
-| `GET /v1/cars`, car detail, hubs, CMS | ✓ | ✓ | ✓ | ✓ |
+| `GET /v1/cars`, car detail, CMS | ✓ | ✓ | ✓ | ✓ |
 | `POST /v1/cars/{id}/interest`, `/v1/test-drives`, `/v1/reservations` | ✗ | ✓ | ✗ | ✗ |
 | `GET/PUT /v1/me`, `/v1/me/*` | ✗ | ✓ | ✓ | ✓ |
-| `/v1/employee/*` | ✗ | ✗ | ✓ | ✓ |
-| `/v1/admin/*` | ✗ | ✗ | ✗ | ✓ |
-| Inspection App (capture UI) | ✗ | ✗ | ✓ | ✓ |
+| `/v1/employee/*` (hub-scoped) | ✗ | ✗ | ✓ | ✗ |
+| `/v1/admin/*` (hub-scoped for hub_admin) | ✗ | ✗ | ✗ | ✓ |
+| Inspection App (capture UI) | ✗ | ✗ | ✓ | ✗ |
 | `POST /v1/integrations/inspection/reports` | HMAC | HMAC | HMAC | HMAC |
 
 #### JWT Claims (all login types)
@@ -109,6 +111,7 @@ AssureCars has **three login types**. Each issues JWTs scoped to specific client
   "clientId": "UserApp",
   "allowedClients": ["UserApp", "Website"],
   "roles": ["user"],
+  "hubIds": [],
   "permissions": ["cars:read", "interest:create", "test-drives:create"],
   "exp": 1720700000,
   "iat": 1720699100
@@ -120,7 +123,8 @@ AssureCars has **three login types**. Each issues JWTs scoped to specific client
 | `accountType` | `User`, `Employee`, `Admin` |
 | `clientId` | Client that initiated login |
 | `allowedClients` | Clients permitted to use this token |
-| `roles` | RBAC roles (e.g. `sales_executive`, `hub_manager`, `super_admin`) |
+| `roles` | RBAC roles: `user`, `hub_employee`, `hub_admin`, `super_admin` |
+| `hubIds` | Hubs this staff token is scoped to (empty/absent ⇒ global `super_admin`; irrelevant for `user`) |
 | `permissions` | Fine-grained permission codes |
 
 ### 1.4 Health Check
@@ -287,14 +291,16 @@ X-Client-Id: EmployeeApp
       "accountType": "Employee",
       "clientId": "EmployeeApp",
       "allowedClients": ["EmployeeApp", "InspectionApp"],
-      "roles": ["sales_executive"],
-      "permissions": ["leads:read", "leads:update", "test-drives:execute"]
+      "roles": ["hub_employee"],
+      "hubIds": ["h1a2b3c4-d5e6-7890-abcd-ef1234567890"],
+      "permissions": ["leads:read", "leads:update", "test-drives:execute", "inspections:perform"]
     },
     "user": {
       "id": "u1a2b3c4-d5e6-7890-abcd-ef1234567890",
       "fullName": "Priya Menon",
       "accountType": "Employee",
       "employeeCode": "EMP-042",
+      "roles": ["hub_employee"],
       "hubIds": ["h1a2b3c4-d5e6-7890-abcd-ef1234567890"]
     }
   },
@@ -341,7 +347,7 @@ X-Client-Id: EmployeeApp
 
 ### 2.5 Admin Login
 
-For **Admin Portal**, **Employee App**, and **Inspection App**. Issues tokens with `accountType: Admin`. MFA is **always required**.
+For the **Admin Portal only** (dashboard). Issues tokens with `accountType: Admin` and role `super_admin` or `hub_admin`. MFA is **always required**. Admin tokens do **not** grant Employee App or Inspection App access.
 
 ```http
 POST /v1/auth/admin/login
@@ -359,7 +365,7 @@ X-Client-Id: AdminPortal
 
 | Header | Allowed values |
 |--------|----------------|
-| `X-Client-Id` | `AdminPortal`, `EmployeeApp`, or `InspectionApp` |
+| `X-Client-Id` | `AdminPortal` |
 
 **Response `200 OK` — MFA challenge (always)**
 
@@ -403,22 +409,24 @@ X-Client-Id: AdminPortal
     "tokenClaims": {
       "accountType": "Admin",
       "clientId": "AdminPortal",
-      "allowedClients": ["AdminPortal", "EmployeeApp", "InspectionApp"],
+      "allowedClients": ["AdminPortal"],
       "roles": ["super_admin"],
+      "hubIds": [],
       "permissions": ["admin:*", "leads:*", "cars:*"]
     },
     "user": {
       "id": "u2b3c4d5-e6f7-8901-bcde-f12345678902",
       "fullName": "Admin User",
       "accountType": "Admin",
-      "roles": ["super_admin"]
+      "roles": ["super_admin"],
+      "hubIds": []
     }
   },
   "traceId": "00-..."
 }
 ```
 
-> Admin tokens grant access to **Admin Portal APIs**, **Employee APIs**, and the **Inspection App** (existing app login updated to accept this token).
+> Admin tokens grant **Admin Portal APIs only** (dashboard). A `super_admin` has `hubIds: []` (global); a `hub_admin` carries its assigned `hubIds` and every `/v1/admin/*` call is filtered to those hubs. Admin tokens are **rejected** by the Employee App and Inspection App.
 
 ---
 
@@ -1201,11 +1209,15 @@ Idempotency-Key: a2h9902-a758-73gh-c77e-h30if4i23dh0
   "location": {
     "addressLine": "HSR Layout, Bengaluru",
     "city": "Bengaluru",
-    "pincode": "560102"
+    "pincode": "560102",
+    "latitude": 12.9116,
+    "longitude": 77.6389
   },
   "preferredDate": "2026-07-19"
 }
 ```
+
+> Provide `latitude`/`longitude` (preferred) or at least `pincode` — the server routes the request to the customer's **nearest active hub** and returns it as `assignedHub`. The buyer is **never** shown the hub id/name; only the appointment address (after scheduling).
 
 **Request — PDI**
 
@@ -1242,11 +1254,14 @@ Idempotency-Key: a2h9902-a758-73gh-c77e-h30if4i23dh0
       "registrationNumber": "KA05CD9876"
     },
     "message": "Request received. Pick an inspection slot to continue.",
-    "nextAction": "schedule"
+    "nextAction": "schedule",
+    "assignedHub": { "area": "HSR Layout", "city": "Bengaluru", "distanceKm": 3.4 }
   },
   "traceId": "00-..."
 }
 ```
+
+> `assignedHub` exposes only **area/city + distance** (never the internal hub id/name). If no hub is in range, `assignedHub` is `null` and the request awaits manual assignment by a Super Admin.
 
 ---
 
@@ -1623,9 +1638,11 @@ If-Match: "1"
 ### 11.1 List Cars (Admin)
 
 ```http
-GET /v1/admin/cars?status=Live&listingSource=Owned&page=1&size=20
+GET /v1/admin/cars?hubId=h1a2b3c4-...&status=Live&listingSource=Owned&q=fortuner&page=1&size=20
 Authorization: Bearer <access_token>
 ```
+
+> **Hub scoping:** a `hub_admin` is automatically limited to their assigned hub(s) — an out-of-scope `hubId` returns `403`. A `super_admin` may pass any `hubId` or omit it to list across all hubs. `q` matches VIN/title. Hub is internal — buyer-facing car APIs never expose hub id/name.
 
 **Response `200 OK`**
 
@@ -1694,6 +1711,8 @@ Authorization: Bearer <access_token>
   "odometerKm": 52600
 }
 ```
+
+> `hubId` is **required** for all cars. For consigned cars it **must equal the consignor's hub** (`422` otherwise). A `hub_admin` may only create cars in their assigned hub(s).
 
 **Response `201 Created`** — no inspection yet for this VIN
 
@@ -1854,7 +1873,7 @@ If-Match: "7"
 **List**
 
 ```http
-GET /v1/admin/consignors?type=Individual&page=1&size=20
+GET /v1/admin/consignors?hubId=h1a2b3c4-...&type=Individual&page=1&size=20
 Authorization: Bearer <access_token>
 ```
 
@@ -1870,6 +1889,8 @@ Authorization: Bearer <access_token>
       "phone": "+919988776655",
       "email": "anita@example.com",
       "company": null,
+      "hubId": "h1a2b3c4-d5e6-7890-abcd-ef1234567890",
+      "commissionPct": 4.50,
       "activeCarsCount": 2
     }
   ],
@@ -1889,14 +1910,20 @@ Authorization: Bearer <access_token>
 
 ```json
 {
+  "hubId": "h1a2b3c4-d5e6-7890-abcd-ef1234567890",
   "type": "Vendor",
   "name": "AutoTrade Partners",
   "phone": "+918012345678",
   "email": "ops@autotrade.example",
   "company": "AutoTrade Partners Pvt Ltd",
-  "address": "Peenya Industrial Area, Bengaluru"
+  "address": "Peenya Industrial Area, Bengaluru",
+  "commissionPct": 6.00
 }
 ```
+
+> `hubId` is **required** — a consignor is onboarded **for exactly one hub**. A `hub_admin` may only pass a hub they are assigned to; a `super_admin` may pass any hub. A consigned car linked to this consignor must be assigned to the same hub.
+>
+> `commissionPct` is the **agreed commission rate (percent, 0–100)** captured at onboarding for **both** `Vendor` and `Individual` consignors. It is **optional** and stored as **reference/display data only** — AssureCars does **not** calculate payouts or settle commissions (offline).
 
 **Response `201 Created`**
 
@@ -1904,8 +1931,10 @@ Authorization: Bearer <access_token>
 {
   "data": {
     "id": "cn2a2b3c4-d5e6-7890-abcd-ef1234567891",
+    "hubId": "h1a2b3c4-d5e6-7890-abcd-ef1234567890",
     "type": "Vendor",
     "name": "AutoTrade Partners",
+    "commissionPct": 6.00,
     "createdAt": "2026-07-11T10:00:00Z"
   },
   "traceId": "00-..."
@@ -1919,9 +1948,13 @@ PATCH /v1/admin/consignors/{consignorId}
 Authorization: Bearer <access_token>
 ```
 
+Accepts the same fields as create (e.g., `commissionPct`, `phone`, `address`). Updating `commissionPct` applies going forward for display; historical deals close offline. Hub-scoped: a `hub_admin` may only manage consignors of their assigned hub(s).
+
 ---
 
 ### 11.7 Hubs
+
+> **`POST /v1/admin/hubs` is `super_admin` only.** `hub_admin` may read hubs they are assigned to. Hubs are internal — buyer-facing APIs never return hub id/name/code.
 
 ```http
 GET /v1/admin/hubs
@@ -2198,10 +2231,22 @@ Authorization: Bearer <access_token>
 
 ---
 
-### 11.13 Users & RBAC
+### 11.13 Users, Roles & Staff Onboarding
+
+Staff logins are created here. Roles are `super_admin`, `hub_admin`, `hub_employee`.
+
+**Who can create whom**
+
+| Caller | Can create | Hub assignment |
+|--------|-----------|----------------|
+| `super_admin` | `hub_admin`, `hub_employee` (and hubs via §11.7) | Any hub(s) |
+| `hub_admin` | `hub_employee` only | Only hub(s) the caller is assigned to |
+
+- Creating or elevating to `super_admin` / `hub_admin` requires the caller to be `super_admin`.
+- A `hub_admin` passing a `hubId` outside their own assignment gets `403`.
 
 ```http
-GET /v1/admin/users?role=sales_executive
+GET /v1/admin/users?role=hub_employee&hubId=h1a2b3c4-...
 Authorization: Bearer <access_token>
 ```
 
@@ -2210,20 +2255,32 @@ POST /v1/admin/users
 Authorization: Bearer <access_token>
 ```
 
-**Request**
+**Request — create a Hub Employee (by a Hub Admin or Super Admin)**
 
 ```json
 {
   "phone": "+919123456789",
   "fullName": "Priya Menon",
   "email": "priya@dealer.example",
-  "roles": ["sales_executive"],
+  "roles": ["hub_employee"],
+  "hubIds": ["h1a2b3c4-d5e6-7890-abcd-ef1234567890"],
   "employee": {
     "employeeCode": "EMP-042",
     "designation": "Sales Executive",
-    "hubIds": ["h1a2b3c4-d5e6-7890-abcd-ef1234567890"],
     "isFieldAgent": false
   }
+}
+```
+
+**Request — create a Hub Admin (Super Admin only)**
+
+```json
+{
+  "phone": "+919111122223",
+  "fullName": "Ravi Kumar",
+  "email": "ravi@dealer.example",
+  "roles": ["hub_admin"],
+  "hubIds": ["h1a2b3c4-...", "h2b3c4d5-..."]
 }
 ```
 
@@ -2234,12 +2291,16 @@ Authorization: Bearer <access_token>
   "data": {
     "userId": "u1a2b3c4-d5e6-7890-abcd-ef1234567890",
     "fullName": "Priya Menon",
-    "roles": ["sales_executive"],
+    "accountType": "Employee",
+    "roles": ["hub_employee"],
+    "hubIds": ["h1a2b3c4-d5e6-7890-abcd-ef1234567890"],
     "employeeId": "e1a2b3c4-d5e6-7890-abcd-ef1234567890"
   },
   "traceId": "00-..."
 }
 ```
+
+> `accountType` is derived from the role: `hub_employee` → `Employee` (Employee App + Inspection App); `hub_admin`/`super_admin` → `Admin` (Admin Portal only). `hubIds` scope every hub-owned resource the user can see/act on.
 
 ---
 
@@ -2838,7 +2899,7 @@ All errors follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) `app
   "type": "https://api.dealer.example/problems/forbidden-client",
   "title": "Token not valid for this client",
   "status": 403,
-  "detail": "User Login tokens cannot access Employee APIs. Use Employee Login or Admin Login.",
+  "detail": "User Login tokens cannot access Employee APIs. Use an Employee Login (hub_employee) token.",
   "traceId": "00-...",
   "accountType": "User",
   "clientId": "EmployeeApp",
@@ -2863,7 +2924,7 @@ All errors follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) `app
 
 ## Appendix A — Endpoint Index
 
-**Auth column values:** `Guest` · `User` (User Login) · `Employee` (Employee or Admin Login) · `Admin` (Admin Login only) · `HMAC` (service webhook)
+**Auth column values:** `Guest` · `User` (User Login) · `Employee` (Employee Login = `hub_employee`, hub-scoped) · `Admin` (Admin Login = `super_admin`/`hub_admin`, Admin Portal only; `hub_admin` hub-scoped) · `HMAC` (service webhook)
 
 | Method | Path | Auth | Phase |
 |--------|------|------|-------|
@@ -2888,44 +2949,46 @@ All errors follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) `app
 | GET | `/v1/cars/{id}/reviews` | Guest | Phase 2 |
 | POST | `/v1/cars/{id}/interest` | User | MVP |
 | POST | `/v1/test-drives` | User | MVP |
-| GET | `/v1/test-drives/{id}` | User / Employee / Admin | MVP |
-| PATCH | `/v1/test-drives/{id}` | Employee / Admin | MVP |
+| GET | `/v1/test-drives/{id}` | User / Employee | MVP |
+| PATCH | `/v1/test-drives/{id}` | Employee | MVP |
 | POST | `/v1/test-drives/{id}/cancel` | User | MVP |
 | POST | `/v1/test-drives/{id}/reschedule` | User | MVP |
-| POST | `/v1/test-drives/{id}/checkin` | Employee / Admin | MVP |
-| POST | `/v1/test-drives/{id}/complete` | Employee / Admin | MVP |
+| POST | `/v1/test-drives/{id}/checkin` | Employee | MVP |
+| POST | `/v1/test-drives/{id}/complete` | Employee | MVP |
 | POST | `/v1/reservations` | User | MVP |
-| GET | `/v1/reservations/{id}` | User / Employee / Admin | MVP |
-| PATCH | `/v1/reservations/{id}` | Employee / Admin | MVP |
+| GET | `/v1/reservations/{id}` | User / Employee | MVP |
+| PATCH | `/v1/reservations/{id}` | Employee | MVP |
 | POST | `/v1/inspection-requests` | User | Phase 2 |
 | GET | `/v1/inspection-requests/{id}` | User | Phase 2 |
 | POST | `/v1/reviews` | User | Phase 2 |
-| GET | `/v1/hubs` | Guest | MVP |
 | GET | `/v1/makes`, `/v1/makes/{id}/models` | Guest | MVP |
 | GET | `/v1/cms/banners` | Guest | MVP |
 | POST | `/v1/media/presign` | Employee / Admin | MVP |
-| GET | `/v1/employee/leads` | Employee / Admin | MVP |
-| PATCH | `/v1/employee/leads/{id}` | Employee / Admin | MVP |
-| POST | `/v1/employee/leads/{id}/notes` | Employee / Admin | MVP |
-| GET | `/v1/employee/schedule` | Employee / Admin | MVP |
-| GET | `/v1/employee/reservations` | Employee / Admin | MVP |
+| GET | `/v1/employee/leads` | Employee | MVP |
+| PATCH | `/v1/employee/leads/{id}` | Employee | MVP |
+| POST | `/v1/employee/leads/{id}/notes` | Employee | MVP |
+| GET | `/v1/employee/schedule` | Employee | MVP |
+| GET | `/v1/employee/reservations` | Employee | MVP |
+| PATCH | `/v1/employee/inspection-requests/{id}` | Employee | Phase 2 |
 | GET/POST | `/v1/admin/cars` | Admin | MVP |
 | PATCH | `/v1/admin/cars/{id}` | Admin | MVP |
 | POST | `/v1/admin/cars/{id}/publish` | Admin | MVP |
 | POST | `/v1/admin/cars/{id}/delist` | Admin | MVP |
 | POST | `/v1/admin/cars/{id}/media` | Admin | MVP |
-| GET/POST | `/v1/admin/consignors` | Admin | MVP |
-| PATCH | `/v1/admin/consignors/{id}` | Admin | MVP |
-| GET/POST | `/v1/admin/hubs` | Admin | MVP |
-| GET/PUT | `/v1/admin/hubs/{id}/slot-templates` | Admin | MVP |
+| GET/POST | `/v1/admin/consignors` | Admin (hub-scoped) | MVP |
+| PATCH | `/v1/admin/consignors/{id}` | Admin (hub-scoped) | MVP |
+| GET | `/v1/admin/hubs` | Admin | MVP |
+| POST | `/v1/admin/hubs` | Admin (`super_admin` only) | MVP |
+| GET/PUT | `/v1/admin/hubs/{id}/slot-templates` | Admin (hub-scoped) | MVP |
 | GET | `/v1/admin/inspection/reports` | Admin | MVP |
 | GET | `/v1/admin/inspection/reports/{id}` | Admin | MVP |
 | POST | `/v1/admin/inspection/unmatched/{id}/resolve` | Admin | MVP |
 | POST | `/v1/admin/inspection/reports/upload` | Admin | MVP |
 | GET | `/v1/admin/dashboard/ops` | Admin | MVP |
-| GET/POST | `/v1/admin/users` | Admin | MVP |
-| GET/PATCH | `/v1/admin/settings` | Admin | MVP |
-| GET/PATCH | `/v1/admin/feature-flags` | Admin | MVP |
+| PATCH | `/v1/admin/inspection-requests/{id}/assign` | Admin (`super_admin`) | Phase 2 |
+| GET/POST | `/v1/admin/users` | Admin (`super_admin`; `hub_admin` for `hub_employee` on own hub[s]) | MVP |
+| GET/PATCH | `/v1/admin/settings` | Admin (`super_admin` only) | MVP |
+| GET/PATCH | `/v1/admin/feature-flags` | Admin (`super_admin` only) | MVP |
 | POST | `/v1/integrations/inspection/reports` | HMAC | MVP |
 | POST | `/v1/integrations/inspection/reports/{id}/pdf` | HMAC | MVP |
 
