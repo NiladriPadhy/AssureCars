@@ -3,7 +3,7 @@
 **Product:** AssureCars — Premium Certified Used-Car Reseller Platform
 **Business Inspiration:** [Cars24](https://www.cars24.com/), [Spinny](https://www.spinny.com/)
 **Document Type:** Solution / High-Level & Low-Level Design (HLD + LLD)
-**Version:** 3.0
+**Version:** 3.1
 **Status:** Draft for Review
 
 ---
@@ -15,7 +15,7 @@
 | Author | Solution Architecture Team |
 | Reviewers | Product, Engineering, Security, DevOps, Business |
 | Audience | Engineering, QA, DevOps, Product, Business Stakeholders |
-| Last Updated | 2026-07-18 (hub role hierarchy & hub scoping v2.0) |
+| Last Updated | 2026-07-18 (reservation-to-lead linkage & admin reserve flow v3.1) |
 
 ### 1.1 Revision History
 
@@ -33,6 +33,7 @@
 | 1.8 | 2026-07-17 | Architecture | **Complete inspection-data capture** — persist the full inspection graph (per-photo images + metadata, manual annotations, AI findings, full checklist responses, damage assessments, scores, integrity signals) as first-class tables alongside the PDF, not just `raw_payload`; **every inspection keyed to a VIN**; formalized **"list a car by VIN → auto-map inspection"** admin flow with bidirectional correlation (migration `002_inspection_complete_data.sql`) |
 | 1.9 | 2026-07-18 | Architecture | **Consignor onboarding + commission-rate capture** — Admin sets an agreed **commission % on the Consignor at onboarding** (both Vendor & Individual) as non-financial reference data; consigned cars inherit the rate for display; commission **payout calculation/settlement stays offline (out of scope)**; added `consignors.commission_pct` (migration `003_consignor_commission.sql`); documented E2E Consignor & consigned-vehicle onboarding workflow |
 | 2.0 | 2026-07-18 | Architecture | **Hub role hierarchy & hub scoping** — introduced `super_admin` (global) / `hub_admin` (hub-scoped) / `hub_employee` (hub-scoped) / `user`; **Admin Login is now Admin Portal only** (dashboard); the **Inspection App is opened by Hub Employee tokens only**; **Consignors scoped to one hub** and a consigned car must share its consignor's hub; **Sell/PDI routed to the customer's nearest hub** (GPS/pincode) which then owns the activity; **buyers never see internal hub identity** (city/area + distance only; exact address post-booking); Super Admin onboards hubs/hub-admins, Hub Admin onboards hub-employees/consignors; migration `004_hub_roles_and_scoping.sql` |
+| 3.1 | 2026-07-18 | Architecture | **Reservation-to-lead linkage & admin reserve flow.** A Hub Admin reservation now **requires an existing matching open lead** (same car/hub) **or** a manual buyer entry (name + phone) captured on a new Admin **"Reserve a car"** form, alongside the offline `token_received` / `token_amount` display-only refs; **Reserved Vehicles** worklist surfaces `daysPending` + **Notify Employee App**; Employee App gains a **read-only Reservation Follow-Up** view (`Sold`/`Released` remain Hub Admin-only). Prototype and Angular **marketing website** updated to showcase all **five** surfaces including the external **Kotlin Inspection App** flow. |
 | 3.0 | 2026-07-18 | Architecture | **Stakeholder-confirmed workflow finalization.** (1) **Web stack = Angular only** for Website + Admin (removed Next.js/React). (2) **Buyer hub visibility reversed** — buyers now see hub name/address/city + distance. (3) **Roles unified** everywhere: Super Admin, Hub Admin, Hub Employee, User (retired "Sales Executive"/"Hub Manager" as roles; they are `hub_employee`/`hub_admin`). (4) **WhatsApp** is an in-scope notification channel. (5) **Reservation redesigned** — **Hub Admin-only** (super_admin superset) after an **offline token payment**; **removed from User App/Website**; a **reserved car is fully locked** (no interest/test-drive/second reservation); configurable hold **default 15 days** → auto-release; new **Reserved Vehicles** admin screen (days-pending + notify Employee App). (6) **Doorstep/nearest-hub radius = 40 km.** (7) Sell **indicative quote / final offer** captured as display-only refs; Sell/PDI inspection = **technician appointment** (not the slot-capacity engine). (8) Added `min_publish_score`. Migration `005_reservation_redesign_and_settings.sql` |
 
 ---

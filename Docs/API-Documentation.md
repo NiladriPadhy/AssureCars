@@ -3,7 +3,7 @@
 **Product:** AssureCars — Premium Certified Used-Car Reseller Platform  
 **API Version:** v1  
 **Base URL:** `https://{dealer-domain}/api/v1`  
-**Status:** Draft — aligned with Solution Design Document v3.0  
+**Status:** Draft — aligned with Solution Design Document v3.1  
 **Last Updated:** 2026-07-18
 
 ---

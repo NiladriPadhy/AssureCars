@@ -11,14 +11,14 @@
 
 ## 1. Purpose & How to Read This Plan
 
-This document turns the **scope defined in the Solution Design Document (SDD v3.0)** and the **Constitution v3.0** into an **executable, phase-wise engineering plan** across all stacks (WebAPI, User App, Employee App, Website, Admin Portal, Inspection integration, DevOps/self-host).
+This document turns the **scope defined in the Solution Design Document (SDD v3.1)** and the **Constitution v3.0** into an **executable, phase-wise engineering plan** across all stacks (WebAPI, User App, Employee App, Website, Admin Portal, Inspection integration, DevOps/self-host).
 
 - **Scope boundary:** requirements are delivered **through Phase 2 only**, and everything is **non-financial** (no payments, deposits, financing, refunds; commission **rate** captured but **no payout/settlement**). Financial modules are out of the current scope.
 - **Delivery philosophy:** get a dealer **online fast** (MVP‑a), then **capture demand** (MVP‑b), then **engage & grow** (Phase 2). Feature flags gate every module so a dealer can adopt at their own pace on a single upgrade path.
 - **Each phase section contains:** goal, entry criteria, workstreams per surface, cross-cutting concerns, feature flags, test gates, and **exit ("definition of done") criteria**.
 - **Sequencing:** phases are sequential at the *release* level, but **workstreams inside a phase run in parallel** across stack teams behind the API contract (contract-first, per Constitution Principle VI).
 
-> **Decisions confirmed:** all previously open decisions were resolved on 2026-07-18 (see §9). They are now baked into the SDD v3.0, API v3.0, Constitution v3.0, and migration `005`. Highlights: **Angular-only** web stack; **hub info is visible to buyers**; unified roles (**Super Admin / Hub Admin / Hub Employee / User**); **WhatsApp** is an in-scope notification channel; **reservation is Hub Admin-only** (offline token, 15-day hold, reserved car fully locked); **doorstep/nearest-hub radius = 40 km**.
+> **Decisions confirmed:** all previously open decisions were resolved on 2026-07-18 (see §9). They are now baked into the SDD v3.1, API v1 (aligned to SDD v3.1), Constitution v3.0, and migration `005`. Highlights: **Angular-only** web stack; **hub info is visible to buyers**; unified roles (**Super Admin / Hub Admin / Hub Employee / User**); **WhatsApp** is an in-scope notification channel; **reservation is Hub Admin-only** (offline token, 15-day hold, reserved car fully locked); **doorstep/nearest-hub radius = 40 km**.
 
 ---
 
@@ -279,7 +279,7 @@ This document turns the **scope defined in the Solution Design Document (SDD v3.
 
 ## 9. Resolved Decisions (confirmed 2026-07-18)
 
-> All decisions from the deep workflow review are now **resolved** and baked into the SDD v3.0, API v3.0, Constitution v3.0, and migration `005`.
+> All decisions from the deep workflow review are now **resolved** and baked into the SDD (v3.0 finalization, refined in v3.1), API v1, Constitution v3.0, and migration `005`.
 
 | # | Decision | Affects | **Resolution** |
 |---|----------|---------|----------------|

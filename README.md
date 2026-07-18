@@ -224,13 +224,13 @@ Capacity = min(car availability, hub bays, available agents)
 | Object Storage | **MinIO** / local filesystem (S3-compatible) |
 | Auth | OIDC + JWT (Keycloak or built-in) |
 | Packaging | **Docker Compose** (one-command self-host) |
-| CI/CD | GitHub Actions |
+| CI/CD | GitHub Actions *(planned for product apps)*; prototype auto-deploys via **Netlify**, marketing site via **Vercel** today |
 
 ---
 
 ## Interactive UI Prototype
 
-The repository includes a **fully interactive HTML prototype** in [`prototype/`](prototype/). It models all four client surfaces and is the fastest way to explore flows, screen layouts, and the product vocabulary before any production code is written.
+The repository includes a **fully interactive HTML prototype** in [`prototype/`](prototype/). It models all five client surfaces (including the external Kotlin Inspection App flow) and is the fastest way to explore flows, screen layouts, and the product vocabulary before any production code is written.
 
 ### Open the Prototype
 
@@ -276,6 +276,7 @@ After that, every `git push` that touches `prototype/` triggers a new deploy.
    - **Website** — dealer storefront (desktop browser frame)
    - **Admin Panel** — dealer self-service portal (desktop)
    - **Employee App** — field operations (phone frame)
+   - **Inspection App** — external Kotlin inspection flow (phone frame)
 3. Click buttons, cards, and links inside each surface — every `data-go` element navigates to another screen.
 4. Watch the **flow hint** in the top-right corner; it updates per surface to highlight the flagship flow.
 
@@ -347,6 +348,24 @@ After that, every `git push` that touches `prototype/` triggers a new deploy.
 
 **Recommended flow:** Schedule → Conduct Test Drive → OTP verify → Drive Complete.
 
+#### Inspection App *(external — Kotlin / Android)* (9 screens)
+
+| Screen | Purpose |
+|--------|---------|
+| Inspections | Job list by VIN / RC with status (in progress, final verify, completed) |
+| Start Inspection | Inspection context (resale / PDI) + vehicle category + identifiers |
+| Identify Vehicle | VIN scan, make/model, variant, odometer, ownership |
+| Inspection Checklist | 200-point sections with per-section progress |
+| Section Detail | Per-item condition rating + photo/video capture slots |
+| Add Photos | Camera capture with AI findings + manual damage annotations |
+| Review | Captured-media grid before finalization |
+| Final Verification | AI integrity & scoring (exterior / interior / safety / confidence) |
+| Report | Grade summary, at-a-glance results, valuation — PDF + JSON export |
+
+**Recommended flow:** Inspections → Start Inspection → Checklist → Add Photos → Final Verification → Report.
+
+> This surface mirrors the existing [`Vehicle-Inspection-Kotlin-Product/`](Vehicle-Inspection-Kotlin-Product/) app and is the source for the Inspection App screenshots on the marketing website. AssureCars **integrates** this app (webhook ingestion of PDF + JSON); it is not rebuilt.
+
 ### Design Language
 
 The prototype uses a consistent token-based design system:
@@ -369,7 +388,7 @@ AssureCars/
 │   └── app.js
 ├── MarketingWebsite/                  ← Angular 22 product marketing site
 ├── Docs/
-│   ├── Solution-Design-Document.md    ← Full HLD + LLD (v3.0)
+│   ├── Solution-Design-Document.md    ← Full HLD + LLD (v3.1)
 │   ├── API-Documentation.md           ← REST API reference (v1)
 │   └── Phase-Wise-Development-Plan.md ← Phase-wise engineering delivery plan
 ├── database/
