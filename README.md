@@ -9,6 +9,15 @@ AssureCars is an enabling-technology product that lets **small-to-medium (SMB) c
 
 > **Not a marketplace.** AssureCars does not own inventory or share data across dealers. One isolated instance per dealer: own database, storage, domain, and branding.
 
+## Support
+
+> If this project helped you, consider sponsoring or buying me a coffee.
+> Your support keeps it maintained, documented, and free.
+
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?style=for-the-badge&logo=GitHub-Sponsors&logoColor=white)](https://github.com/sponsors/NiladriPadhy)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/npadhy)
+
+This work stays open source. A small contribution helps cover time for bug fixes, new features, and docs.
 ---
 
 ## Table of Contents
@@ -462,13 +471,3 @@ This repository currently contains design docs, the live HTML prototype, the Ang
 5. **Review the database migrations** — [`database/migrations/`](database/migrations/)
 
 ---
-
-## Support
-
-> If this plugin saved you a weekend of native plumbing, consider buying me a coffee.
-> Your support keeps it maintained, documented, and free.
-
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/npadhy)
-
-This library stays open source. A coffee helps cover time for bug fixes, new features, and docs.
-
